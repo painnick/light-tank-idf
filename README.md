@@ -33,9 +33,12 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 | 우측 트랙 IN1 / IN2 (Motor-IN-A1/A2) | 0 / 1 |
 | 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | 2 / 3 |
 | 포신 LED (CannonLED) | 6 |
-| 게틀링 / 헤드라이트 (HeadLight) | 7 |
+| 게틀링 LED (MG) | 7 |
+| 헤드라이트 (HeadLight) | 20 |
 | 터렛 서보 (TurretServo) | 14 |
 | DFPlayer TX / RX | 18 / 19 |
+
+헤드라이트는 게임패드 연결 시 ON, 해제 시 OFF입니다. 게틀링 LED는 A 버튼 발사 시에만 깜빡입니다.
 
 **피해야 할 핀 (C6 Super Mini):** GPIO8 (RGB+strap), GPIO9 (BOOT), GPIO12/13 (USB), GPIO15 (strap). 모터는 strapping GPIO4/5를 기본으로 쓰지 않습니다.  
 DFPlayer RX를 안 쓰면 menuconfig에서 **-1** 로 두면 TX 전용으로 동작합니다.

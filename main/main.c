@@ -36,6 +36,7 @@ static const char* TAG = "RC_TANK";
 #define PIN_RIGHT_IN2       CONFIG_PIN_RIGHT_IN2
 #define PIN_CANNON_LED      CONFIG_PIN_CANNON_LED
 #define PIN_MG_LED          CONFIG_PIN_MG_LED
+#define PIN_HEADLIGHT       CONFIG_PIN_HEADLIGHT
 #define PIN_TURRET_SERVO    CONFIG_PIN_TURRET_SERVO
 
 // ============================================================================
@@ -647,6 +648,7 @@ static void control_task(void* arg) {
             vTaskDelay(pdMS_TO_TICKS(100));
             dfplayer_set_volume(g_current_volume);
             dfplayer_play(DFPLAYER_TRACK_CONNECTED);
+            gpio_set_level(PIN_HEADLIGHT, 1);
             ESP_LOGI(TAG, "게임패드 연결됨");
         }
 
@@ -661,6 +663,7 @@ static void control_task(void* arg) {
             g_mg_led_on = false;
             gpio_set_level(PIN_MG_LED, 0);
             gpio_set_level(PIN_CANNON_LED, 0);
+            gpio_set_level(PIN_HEADLIGHT, 0);
             ESP_LOGI(TAG, "게임패드 연결 해제됨");
         }
         prev_connected = cur_connected;
@@ -724,6 +727,7 @@ void app_main(void) {
     gpio_reset_pin(PIN_RIGHT_IN2);
     gpio_reset_pin(PIN_CANNON_LED);
     gpio_reset_pin(PIN_MG_LED);
+    gpio_reset_pin(PIN_HEADLIGHT);
     // 터렛 서보는 게임패드 연결 시 attach (부팅 시 PWM/출력 설정 안 함)
     gpio_reset_pin(PIN_TURRET_SERVO);
 
@@ -733,6 +737,7 @@ void app_main(void) {
     gpio_set_direction(PIN_RIGHT_IN2, GPIO_MODE_OUTPUT);
     gpio_set_direction(PIN_CANNON_LED, GPIO_MODE_OUTPUT);
     gpio_set_direction(PIN_MG_LED, GPIO_MODE_OUTPUT);
+    gpio_set_direction(PIN_HEADLIGHT, GPIO_MODE_OUTPUT);
 
     gpio_set_level(PIN_LEFT_IN1, 0);
     gpio_set_level(PIN_LEFT_IN2, 0);
@@ -740,6 +745,7 @@ void app_main(void) {
     gpio_set_level(PIN_RIGHT_IN2, 0);
     gpio_set_level(PIN_CANNON_LED, 0);
     gpio_set_level(PIN_MG_LED, 0);
+    gpio_set_level(PIN_HEADLIGHT, 0);
 
     // LEDC 초기화 (서보 채널은 패드 연결 시 turret_attach)
     init_ledc();

@@ -37,11 +37,19 @@ menu "RC Tank Hardware Pins"
             Cannon LED output. Default: GPIO6.
 
     config PIN_MG_LED
-        int "MG / HeadLight LED"
+        int "Gatling / MG LED"
         range 0 30
         default 7
         help
-            Machine-gun / headlight LED. Default: GPIO7.
+            Machine-gun (gatling) muzzle LED. Default: GPIO7.
+
+    config PIN_HEADLIGHT
+        int "Headlight (HeadLight)"
+        range 0 30
+        default 20
+        help
+            Headlight LED output (separate from MG). Default: GPIO20.
+            On while gamepad is connected; off when disconnected.
 
     config PIN_TURRET_SERVO
         int "Turret servo PWM (TurretServo)"
