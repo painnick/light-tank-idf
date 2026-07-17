@@ -46,9 +46,9 @@ menu "RC Tank Hardware Pins"
     config PIN_HEADLIGHT
         int "Headlight (HeadLight)"
         range 0 30
-        default 22
+        default 2
         help
-            Headlight LED. Default GPIO22 (left header cluster).
+            Headlight LED. Default GPIO2 (left header, freed from left track).
             Toggled by gamepad Y button (edge); off on disconnect.
 
     config PIN_TURRET_SERVO

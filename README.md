@@ -36,7 +36,7 @@ PCB 라우팅: LED는 **좌측**, 좌측 트랙 모터·서보·DFPlayer는 **�
 | 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | **19 / 20** | 우 |
 | 포신 LED (CannonLED) | 6 | 좌 (LED 묶음) |
 | 게틀링 LED (MG) | 7 | 좌 (LED 묶음) |
-| 헤드라이트 (HeadLight) | 22 | 좌 (LED 묶음) |
+| 헤드라이트 (HeadLight) | **2** | 좌 (LED 묶음) |
 | 터렛 서보 (TurretServo) | 14 | 우 |
 | DFPlayer TX (→ DFPlayer RX) | 18 | 우 |
 | DFPlayer RX | **미사용 (-1)** | — |
@@ -73,9 +73,9 @@ PCB 라우팅: LED는 **좌측**, 좌측 트랙 모터·서보·DFPlayer는 **�
 
 | 상태 | GPIO |
 |------|------|
-| **사용 중 (안전 쪽)** | 0/1·19/20 모터, 6/7/22 LED, 14 서보, 18 DFPlayer TX |
-| **의도적 미사용** | 2, 3, 4, 5, 8, 9, 12, 13, 15, 16, 17 + DFPlayer RX |
-| **여유 (확장)** | 21, 23 등 (strap/USB 아님) |
+| **사용 중 (안전 쪽)** | 0/1·19/20 모터, 6/7/**2** LED, 14 서보, 18 DFPlayer TX |
+| **의도적 미사용** | 3, 4, 5, 8, 9, 12, 13, 15, 16, 17, 22 + DFPlayer RX |
+| **여유 (확장)** | 21, 22, 23 등 (strap/USB 아님) |
 
 **PCB 팁:** DRV8833 IN 입력은 약한 **pull-down** 권장 (부팅 전 high-Z 구간 모터 방지). 스트래핑 핀에 강한 외장 pull-up/down을 걸지 말 것.
 
