@@ -3,76 +3,75 @@ menu "RC Tank Hardware Pins"
     config PIN_RIGHT_IN1
         int "Right track IN1 (Motor-IN-A1)"
         range 0 30
-        default 0
+        default 14
         help
-            DRV8833 right track IN1. C6 Super Mini default: GPIO0.
-            Avoid 8/9/12/13/15 (boot/USB). Prefer non-strapping for motors.
+            DRV8833 right track IN1. Default: GPIO14.
 
     config PIN_RIGHT_IN2
         int "Right track IN2 (Motor-IN-A2)"
         range 0 30
-        default 1
+        default 18
         help
-            DRV8833 right track IN2. Default: GPIO1.
+            DRV8833 right track IN2. Default: GPIO18.
 
     config PIN_LEFT_IN1
         int "Left track IN1 (Motor-IN-B1)"
         range 0 30
         default 19
         help
-            DRV8833 left track IN1. Default: GPIO19 (right header).
+            DRV8833 left track IN1. Default: GPIO19.
 
     config PIN_LEFT_IN2
         int "Left track IN2 (Motor-IN-B2)"
         range 0 30
         default 20
         help
-            DRV8833 left track IN2. Default: GPIO20 (right header).
+            DRV8833 left track IN2. Default: GPIO20.
 
     config PIN_MOTOR_NSLEEP
         int "DRV8833 nSLEEP (active high enable)"
         range 0 30
-        default 2
+        default 23
         help
             DRV8833 nSLEEP: LOW=sleep (outputs Hi-Z), HIGH=run.
-            Default GPIO2. PCB: ~10k pull-down to GND so boot keeps sleep.
+            Default GPIO23. PCB: ~10k pull-down to GND so boot keeps sleep.
             Firmware: LOW until motor pins ready, then HIGH. Off on pad disconnect.
-
-    config PIN_CANNON_LED
-        int "Cannon LED (CannonLED)"
-        range 0 30
-        default 6
-        help
-            Cannon LED. Default GPIO6 (left header cluster with MG/headlight).
-
-    config PIN_MG_LED
-        int "Gatling / MG LED"
-        range 0 30
-        default 7
-        help
-            Gatling LED. Default GPIO7 (left header, next to cannon LED).
 
     config PIN_HEADLIGHT
         int "Headlight (HeadLight)"
         range 0 30
-        default 3
+        default 0
         help
-            Headlight LED. Default GPIO3 (left header).
+            Headlight LED. Default GPIO0.
             Toggled by gamepad Y button (edge); off on disconnect.
+
+    config PIN_CANNON_LED
+        int "Cannon LED (CannonLED)"
+        range 0 30
+        default 1
+        help
+            Cannon LED. Default GPIO1.
+
+    config PIN_MG_LED
+        int "Gatling / MG LED"
+        range 0 30
+        default 2
+        help
+            Gatling LED. Default GPIO2.
 
     config PIN_TURRET_SERVO
         int "Turret servo PWM (TurretServo)"
         range 0 30
-        default 14
+        default 21
         help
-            SG90 PWM via LEDC. Default: GPIO14 (right header).
+            SG90 PWM via LEDC. Default: GPIO21 (14 freed for motor).
 
     config PIN_DFPLAYER_TX
         int "DFPlayer UART TX (ESP -> DFPlayer RX)"
         range 0 30
-        default 18
+        default 22
         help
-            UART1 TX only to DFPlayer RX. Default: GPIO18 (right header).
+            UART1 TX only to DFPlayer RX. Default: GPIO22 (18 freed for motor).
             This project does not wire DFPlayer UART feedback.
 
     config PIN_DFPLAYER_RX
