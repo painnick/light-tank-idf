@@ -28,20 +28,23 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 
 핀은 **Kconfig** 로 관리합니다. 변경: `idf.py menuconfig` → **RC Tank Hardware Pins**.
 
-| 기능 (넷) | GPIO (기본) |
-|-----------|-------------|
-| 우측 트랙 IN1 / IN2 (Motor-IN-A1/A2) | 0 / 1 |
-| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | 2 / 3 |
-| 포신 LED (CannonLED) | 6 |
-| 게틀링 LED (MG) | 7 |
-| 헤드라이트 (HeadLight) | 20 |
-| 터렛 서보 (TurretServo) | 14 |
-| DFPlayer TX / RX | 18 / 19 |
+PCB 라우팅: **좌측**에 모터·LED, **우측**에 서보·DFPlayer TX.
 
-헤드라이트는 게임패드 연결 시 ON, 해제 시 OFF입니다. 게틀링 LED는 A 버튼 발사 시에만 깜빡입니다.
+| 기능 (넷) | GPIO (기본) | 헤더 쪽 |
+|-----------|-------------|---------|
+| 우측 트랙 IN1 / IN2 (Motor-IN-A1/A2) | 0 / 1 | 좌 |
+| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | 2 / 3 | 좌 |
+| 포신 LED (CannonLED) | 6 | 좌 (LED 묶음) |
+| 게틀링 LED (MG) | 7 | 좌 (LED 묶음) |
+| 헤드라이트 (HeadLight) | 22 | 좌 (LED 묶음) |
+| 터렛 서보 (TurretServo) | 14 | 우 |
+| DFPlayer TX (→ DFPlayer RX) | 18 | 우 |
+| DFPlayer RX | **미사용 (-1)** | — |
 
-**피해야 할 핀 (C6 Super Mini):** GPIO8 (RGB+strap), GPIO9 (BOOT), GPIO12/13 (USB), GPIO15 (strap). 모터는 strapping GPIO4/5를 기본으로 쓰지 않습니다.  
-DFPlayer RX를 안 쓰면 menuconfig에서 **-1** 로 두면 TX 전용으로 동작합니다.
+헤드라이트는 게임패드 연결 시 ON, 해제 시 OFF입니다. 게틀링 LED는 A 버튼 발사 시에만 깜빡입니다.  
+DFPlayer는 **TX 전용** (피드백 배선 없음).
+
+**피해야 할 핀 (C6 Super Mini):** GPIO8 (RGB+strap), GPIO9 (BOOT), GPIO12/13 (USB), GPIO15 (strap). 모터는 strapping GPIO4/5를 기본으로 쓰지 않습니다.
 
 ### PCB
 

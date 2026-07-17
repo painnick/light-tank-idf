@@ -12,7 +12,7 @@
 static const char* TAG = "dfplayer";
 
 /* 핀: menuconfig → RC Tank Hardware Pins
- * C6 Super Mini 기본 TX=18 / RX=19. RX=-1 이면 TX 전용(피드백 태스크 미생성).
+ * C6 Super Mini 기본 TX=18, RX=-1 (TX 전용 — 피드백 배선/태스크 없음).
  * 피하기: GPIO8/9(strap·BOOT·RGB), 12/13(USB), 15(strap).
  */
 #define PIN_DFPLAYER_TX  CONFIG_PIN_DFPLAYER_TX

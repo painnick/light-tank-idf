@@ -34,21 +34,21 @@ menu "RC Tank Hardware Pins"
         range 0 30
         default 6
         help
-            Cannon LED output. Default: GPIO6.
+            Cannon LED. Default GPIO6 (left header cluster with MG/headlight).
 
     config PIN_MG_LED
         int "Gatling / MG LED"
         range 0 30
         default 7
         help
-            Machine-gun (gatling) muzzle LED. Default: GPIO7.
+            Gatling LED. Default GPIO7 (left header, next to cannon LED).
 
     config PIN_HEADLIGHT
         int "Headlight (HeadLight)"
         range 0 30
-        default 20
+        default 22
         help
-            Headlight LED output (separate from MG). Default: GPIO20.
+            Headlight LED. Default GPIO22 (left header cluster).
             On while gamepad is connected; off when disconnected.
 
     config PIN_TURRET_SERVO
@@ -56,20 +56,21 @@ menu "RC Tank Hardware Pins"
         range 0 30
         default 14
         help
-            SG90 PWM via LEDC. Default: GPIO14 (non-strapping).
+            SG90 PWM via LEDC. Default: GPIO14 (right header).
 
     config PIN_DFPLAYER_TX
         int "DFPlayer UART TX (ESP -> DFPlayer RX)"
         range 0 30
         default 18
         help
-            UART1 TX to DFPlayer RX. Default: GPIO18.
+            UART1 TX only to DFPlayer RX. Default: GPIO18 (right header).
+            This project does not wire DFPlayer UART feedback.
 
     config PIN_DFPLAYER_RX
-        int "DFPlayer UART RX (-1 = unused)"
+        int "DFPlayer UART RX (-1 = unused / TX-only)"
         range -1 30
-        default 19
+        default -1
         help
-            UART1 RX from DFPlayer. Default: GPIO19. Set -1 for TX-only.
+            Leave at -1 (default). RX is not used on the C6 Super Mini PCB.
 
 endmenu
