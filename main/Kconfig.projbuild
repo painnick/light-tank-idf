@@ -18,16 +18,16 @@ menu "RC Tank Hardware Pins"
     config PIN_LEFT_IN1
         int "Left track IN1 (Motor-IN-B1)"
         range 0 30
-        default 2
+        default 19
         help
-            DRV8833 left track IN1. Default: GPIO2.
+            DRV8833 left track IN1. Default: GPIO19 (right header).
 
     config PIN_LEFT_IN2
         int "Left track IN2 (Motor-IN-B2)"
         range 0 30
-        default 3
+        default 20
         help
-            DRV8833 left track IN2. Default: GPIO3.
+            DRV8833 left track IN2. Default: GPIO20 (right header).
 
     config PIN_CANNON_LED
         int "Cannon LED (CannonLED)"

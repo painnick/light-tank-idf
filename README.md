@@ -28,12 +28,12 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 
 핀은 **Kconfig** 로 관리합니다. 변경: `idf.py menuconfig` → **RC Tank Hardware Pins**.
 
-PCB 라우팅: **좌측**에 모터·LED, **우측**에 서보·DFPlayer TX.
+PCB 라우팅: LED는 **좌측**, 좌측 트랙 모터·서보·DFPlayer는 **우측** 쪽 배치.
 
 | 기능 (넷) | GPIO (기본) | 헤더 쪽 |
 |-----------|-------------|---------|
 | 우측 트랙 IN1 / IN2 (Motor-IN-A1/A2) | 0 / 1 | 좌 |
-| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | 2 / 3 | 좌 |
+| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | **19 / 20** | 우 |
 | 포신 LED (CannonLED) | 6 | 좌 (LED 묶음) |
 | 게틀링 LED (MG) | 7 | 좌 (LED 묶음) |
 | 헤드라이트 (HeadLight) | 22 | 좌 (LED 묶음) |
@@ -73,9 +73,9 @@ PCB 라우팅: **좌측**에 모터·LED, **우측**에 서보·DFPlayer TX.
 
 | 상태 | GPIO |
 |------|------|
-| **사용 중 (안전 쪽)** | 0–3 모터, 6/7/22 LED, 14 서보, 18 DFPlayer TX |
-| **의도적 미사용** | 4, 5, 8, 9, 12, 13, 15, 16, 17 + DFPlayer RX |
-| **여유 (확장)** | 19, 20, 21, 23 등 (strap/USB 아님) |
+| **사용 중 (안전 쪽)** | 0/1·19/20 모터, 6/7/22 LED, 14 서보, 18 DFPlayer TX |
+| **의도적 미사용** | 2, 3, 4, 5, 8, 9, 12, 13, 15, 16, 17 + DFPlayer RX |
+| **여유 (확장)** | 21, 23 등 (strap/USB 아님) |
 
 **PCB 팁:** DRV8833 IN 입력은 약한 **pull-down** 권장 (부팅 전 high-Z 구간 모터 방지). 스트래핑 핀에 강한 외장 pull-up/down을 걸지 말 것.
 
