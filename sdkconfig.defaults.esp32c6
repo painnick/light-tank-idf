@@ -4,15 +4,15 @@
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
 
 # RC Tank Hardware Pins (C6 Super Mini PCB defaults; overridable in menuconfig)
-# Motors: right track 0/1 (left hdr), left track 19/20 (right hdr)
-# LEDs 6/7/2 left | servo 14, DFPlayer TX 18 right (RX unused)
+# Right track 0/1, left track 19/20, nSLEEP 2, headlight 3, LEDs 6/7, servo 14, DF TX 18
 CONFIG_PIN_RIGHT_IN1=0
 CONFIG_PIN_RIGHT_IN2=1
 CONFIG_PIN_LEFT_IN1=19
 CONFIG_PIN_LEFT_IN2=20
+CONFIG_PIN_MOTOR_NSLEEP=2
 CONFIG_PIN_CANNON_LED=6
 CONFIG_PIN_MG_LED=7
-CONFIG_PIN_HEADLIGHT=2
+CONFIG_PIN_HEADLIGHT=3
 CONFIG_PIN_TURRET_SERVO=14
 CONFIG_PIN_DFPLAYER_TX=18
 CONFIG_PIN_DFPLAYER_RX=-1

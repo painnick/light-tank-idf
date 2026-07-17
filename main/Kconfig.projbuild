@@ -29,6 +29,15 @@ menu "RC Tank Hardware Pins"
         help
             DRV8833 left track IN2. Default: GPIO20 (right header).
 
+    config PIN_MOTOR_NSLEEP
+        int "DRV8833 nSLEEP (active high enable)"
+        range 0 30
+        default 2
+        help
+            DRV8833 nSLEEP: LOW=sleep (outputs Hi-Z), HIGH=run.
+            Default GPIO2. PCB: ~10k pull-down to GND so boot keeps sleep.
+            Firmware: LOW until motor pins ready, then HIGH. Off on pad disconnect.
+
     config PIN_CANNON_LED
         int "Cannon LED (CannonLED)"
         range 0 30
@@ -46,9 +55,9 @@ menu "RC Tank Hardware Pins"
     config PIN_HEADLIGHT
         int "Headlight (HeadLight)"
         range 0 30
-        default 2
+        default 3
         help
-            Headlight LED. Default GPIO2 (left header, freed from left track).
+            Headlight LED. Default GPIO3 (left header).
             Toggled by gamepad Y button (edge); off on disconnect.
 
     config PIN_TURRET_SERVO

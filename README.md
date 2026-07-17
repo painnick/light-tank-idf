@@ -28,21 +28,24 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 
 핀은 **Kconfig** 로 관리합니다. 변경: `idf.py menuconfig` → **RC Tank Hardware Pins**.
 
-PCB 라우팅: LED는 **좌측**, 좌측 트랙 모터·서보·DFPlayer는 **우측** 쪽 배치.
+PCB 라우팅: LED·nSLEEP은 **좌측**, 좌측 트랙·서보·DFPlayer는 **우측** 쪽 배치.
 
 | 기능 (넷) | GPIO (기본) | 헤더 쪽 |
 |-----------|-------------|---------|
 | 우측 트랙 IN1 / IN2 (Motor-IN-A1/A2) | 0 / 1 | 좌 |
-| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | **19 / 20** | 우 |
+| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | 19 / 20 | 우 |
+| **DRV8833 nSLEEP** | **2** | 좌 |
+| 헤드라이트 (HeadLight) | **3** | 좌 (LED 묶음) |
 | 포신 LED (CannonLED) | 6 | 좌 (LED 묶음) |
 | 게틀링 LED (MG) | 7 | 좌 (LED 묶음) |
-| 헤드라이트 (HeadLight) | **2** | 좌 (LED 묶음) |
 | 터렛 서보 (TurretServo) | 14 | 우 |
 | DFPlayer TX (→ DFPlayer RX) | 18 | 우 |
 | DFPlayer RX | **미사용 (-1)** | — |
 
-헤드라이트는 **Y 버튼**으로 On/Off 토글합니다 (rising edge — 길게 눌러도 깜빡이지 않음). 패드 해제 시 소등.  
-게틀링 LED는 A 버튼 발사 시에만 깜빡입니다. DFPlayer는 **TX 전용** (피드백 배선 없음).
+**nSLEEP:** LOW=슬립(출력 Hi-Z), HIGH=동작. 펌웨어는 부팅 직후 LOW → 모터 IN/PWM 준비 후 HIGH. 패드 해제 시 LOW, 재연결 시 HIGH.  
+PCB에 nSLEEP **~10k pull-down** 권장 → 부팅 중 드라이버 sleep 유지. 이 경우 IN×4 pull-down은 생략 가능(nSLEEP이 부팅 모터 방지 담당).
+
+헤드라이트는 **Y 버튼** On/Off 토글 (rising edge). 게틀링 LED는 A 발사 시만. DFPlayer는 **TX 전용**.
 
 ### 스트래핑 핀 & 주의 핀 (ESP32-C6 / Super Mini)
 
@@ -73,11 +76,15 @@ PCB 라우팅: LED는 **좌측**, 좌측 트랙 모터·서보·DFPlayer는 **�
 
 | 상태 | GPIO |
 |------|------|
-| **사용 중 (안전 쪽)** | 0/1·19/20 모터, 6/7/**2** LED, 14 서보, 18 DFPlayer TX |
-| **의도적 미사용** | 3, 4, 5, 8, 9, 12, 13, 15, 16, 17, 22 + DFPlayer RX |
+| **사용 중 (안전 쪽)** | 0/1·19/20 모터 IN, **2** nSLEEP, **3**/6/7 LED, 14 서보, 18 DFPlayer TX |
+| **의도적 미사용** | 4, 5, 8, 9, 12, 13, 15, 16, 17 + DFPlayer RX |
 | **여유 (확장)** | 21, 22, 23 등 (strap/USB 아님) |
 
-**PCB 팁:** DRV8833 IN 입력은 약한 **pull-down** 권장 (부팅 전 high-Z 구간 모터 방지). 스트래핑 핀에 강한 외장 pull-up/down을 걸지 말 것.
+**PCB 팁:**
+- **nSLEEP (GPIO2)에 ~10k pull-down** — 부팅·리셋 시 드라이버 sleep (IN pull-down 네 개 대체 가능).
+- IN×4 pull-down은 선택(이중 안전). nSLEEP을 VCC 고정한 모듈이면 IN pull-down 필수.
+- 스트래핑 핀에 강한 외장 pull-up/down 금지.
+- 깨우기 순서: IN/PWM=0 설정 → nSLEEP HIGH.
 
 ### PCB
 

@@ -34,6 +34,7 @@ static const char* TAG = "RC_TANK";
 #define PIN_LEFT_IN2        CONFIG_PIN_LEFT_IN2
 #define PIN_RIGHT_IN1       CONFIG_PIN_RIGHT_IN1
 #define PIN_RIGHT_IN2       CONFIG_PIN_RIGHT_IN2
+#define PIN_MOTOR_NSLEEP    CONFIG_PIN_MOTOR_NSLEEP  // DRV8833 nSLEEP: 0=sleep, 1=run
 #define PIN_CANNON_LED      CONFIG_PIN_CANNON_LED
 #define PIN_MG_LED          CONFIG_PIN_MG_LED
 #define PIN_HEADLIGHT       CONFIG_PIN_HEADLIGHT
@@ -194,6 +195,15 @@ static void save_volume_to_nvs(int vol) {
     nvs_set_i32(g_nvs_handle, NVS_KEY_VOLUME, clamped);
     nvs_commit(g_nvs_handle);
     ESP_LOGI(TAG, "NVS 볼륨 저장: %d", clamped);
+}
+
+// ============================================================================
+// DRV8833 nSLEEP (LOW=sleep / outputs Hi-Z, HIGH=enable)
+// PCB: ~10k pull-down on nSLEEP so boot keeps driver off without IN pull-downs.
+// ============================================================================
+static void motor_driver_set_enabled(bool enable) {
+    gpio_set_level(PIN_MOTOR_NSLEEP, enable ? 1 : 0);
+    ESP_LOGI(TAG, "DRV8833 nSLEEP=%s", enable ? "HIGH(run)" : "LOW(sleep)");
 }
 
 // ============================================================================
@@ -666,6 +676,8 @@ static void control_task(void* arg) {
             dfplayer_play(DFPLAYER_TRACK_CONNECTED);
             // 헤드라이트는 Y 토글 — 연결 시 자동 ON 하지 않음
             g_y_pressed = false;
+            // 모터 드라이버 enable (IN은 이미 0 / 램프 정지)
+            motor_driver_set_enabled(true);
             ESP_LOGI(TAG, "게임패드 연결됨");
         }
 
@@ -675,6 +687,7 @@ static void control_task(void* arg) {
             dfplayer_play_loop(DFPLAYER_TRACK_IDLE);
             g_last_idle_sound_time = now_ms();
             set_track_immediate(0, 0);
+            motor_driver_set_enabled(false); // nSLEEP LOW — 부팅 외 안전 컷오프
             turret_detach();
             g_machinegun_firing = false;
             g_mg_led_on = false;
@@ -724,8 +737,13 @@ static void bt_main_task(void* arg) {
 // 앱 메인
 // ============================================================================
 void app_main(void) {
-    // 모니터 연결 직후에도 바로 보이도록 즉시 로그
-    // 캐패시터 충전 대기
+    // 1) DRV8833 즉시 sleep (외장 nSLEEP pull-down + 소프트웨어 LOW)
+    //    부팅 중 IN 플로팅이 있어도 모터 브리지는 꺼진 상태 유지
+    gpio_reset_pin(PIN_MOTOR_NSLEEP);
+    gpio_set_direction(PIN_MOTOR_NSLEEP, GPIO_MODE_OUTPUT);
+    gpio_set_level(PIN_MOTOR_NSLEEP, 0);
+
+    // 캐패시터 충전 대기 (이 동안 nSLEEP=LOW)
     vTaskDelay(pdMS_TO_TICKS(2000));
 
     ESP_LOGI(TAG, "RC Tank 초기화 시작");
@@ -739,7 +757,7 @@ void app_main(void) {
     nvs_open(NVS_NAMESPACE, NVS_READWRITE, &g_nvs_handle);
     load_volume_from_nvs();
 
-    // GPIO 초기화
+    // 2) 모터 IN 및 기타 GPIO — 전부 정지 레벨로 설정한 뒤 드라이버 enable
     gpio_reset_pin(PIN_LEFT_IN1);
     gpio_reset_pin(PIN_LEFT_IN2);
     gpio_reset_pin(PIN_RIGHT_IN1);
@@ -768,6 +786,10 @@ void app_main(void) {
 
     // LEDC 초기화 (서보 채널은 패드 연결 시 turret_attach)
     init_ledc();
+
+    // 3) IN/PWM 준비 완료 후 드라이버 enable
+    //    (게임패드 없으면 바로 enable — 스틱 입력 전에도 정지 유지)
+    motor_driver_set_enabled(true);
 
     // DFPlayer 초기화 (실패해도 탱크/BT는 계속)
     if (dfplayer_init() != ESP_OK) {
