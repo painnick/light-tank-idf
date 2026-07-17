@@ -32,8 +32,8 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 
 | 기능 (넷) | GPIO (기본) |
 |-----------|-------------|
-| 우측 트랙 IN1 / IN2 (Motor-IN-A1/A2) | **0 / 1** |
-| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | **2 / 3** |
+| 우측 트랙 IN1 / IN2 (Motor-IN-A1/A2) | **3 / 2** |
+| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | **1 / 0** |
 | **DRV8833 nSLEEP** | **6** |
 | 헤드라이트 (HeadLight) | **20** |
 | 포신 LED (CannonLED) | **19** |
@@ -76,7 +76,7 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 | 상태 | GPIO |
 |------|------|
-| **사용 중** | 모터 **0–3**, nSLEEP **6**, LED **20/19/18**, 서보 **21**, DF TX **22** |
+| **사용 중** | 모터 R **3/2** · L **1/0**, nSLEEP **6**, LED **20/19/18**, 서보 **21**, DF TX **22** |
 | **의도적 미사용** | 4, 5, 7, 8, 9, 12, 13, 14, 15, 16, 17, 23 + DFPlayer RX |
 | **여유 (확장)** | 7, 14, 23 등 (strap/USB 아님) |
 

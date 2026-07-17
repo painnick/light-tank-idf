@@ -3,30 +3,30 @@ menu "RC Tank Hardware Pins"
     config PIN_RIGHT_IN1
         int "Right track IN1 (Motor-IN-A1)"
         range 0 30
-        default 0
+        default 3
         help
-            DRV8833 right track IN1. Default: GPIO0 (flipped PCB motor cluster).
+            DRV8833 right track IN1. Default: GPIO3 (motor cluster order reversed).
 
     config PIN_RIGHT_IN2
         int "Right track IN2 (Motor-IN-A2)"
         range 0 30
-        default 1
+        default 2
         help
-            DRV8833 right track IN2. Default: GPIO1.
+            DRV8833 right track IN2. Default: GPIO2.
 
     config PIN_LEFT_IN1
         int "Left track IN1 (Motor-IN-B1)"
         range 0 30
-        default 2
+        default 1
         help
-            DRV8833 left track IN1. Default: GPIO2.
+            DRV8833 left track IN1. Default: GPIO1.
 
     config PIN_LEFT_IN2
         int "Left track IN2 (Motor-IN-B2)"
         range 0 30
-        default 3
+        default 0
         help
-            DRV8833 left track IN2. Default: GPIO3.
+            DRV8833 left track IN2. Default: GPIO0.
 
     config PIN_MOTOR_NSLEEP
         int "DRV8833 nSLEEP (active high enable)"
