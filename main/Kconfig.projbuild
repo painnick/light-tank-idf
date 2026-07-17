@@ -1,0 +1,67 @@
+menu "RC Tank Hardware Pins"
+
+    config PIN_RIGHT_IN1
+        int "Right track IN1 (Motor-IN-A1)"
+        range 0 30
+        default 0
+        help
+            DRV8833 right track IN1. C6 Super Mini default: GPIO0.
+            Avoid 8/9/12/13/15 (boot/USB). Prefer non-strapping for motors.
+
+    config PIN_RIGHT_IN2
+        int "Right track IN2 (Motor-IN-A2)"
+        range 0 30
+        default 1
+        help
+            DRV8833 right track IN2. Default: GPIO1.
+
+    config PIN_LEFT_IN1
+        int "Left track IN1 (Motor-IN-B1)"
+        range 0 30
+        default 2
+        help
+            DRV8833 left track IN1. Default: GPIO2.
+
+    config PIN_LEFT_IN2
+        int "Left track IN2 (Motor-IN-B2)"
+        range 0 30
+        default 3
+        help
+            DRV8833 left track IN2. Default: GPIO3.
+
+    config PIN_CANNON_LED
+        int "Cannon LED (CannonLED)"
+        range 0 30
+        default 6
+        help
+            Cannon LED output. Default: GPIO6.
+
+    config PIN_MG_LED
+        int "MG / HeadLight LED"
+        range 0 30
+        default 7
+        help
+            Machine-gun / headlight LED. Default: GPIO7.
+
+    config PIN_TURRET_SERVO
+        int "Turret servo PWM (TurretServo)"
+        range 0 30
+        default 14
+        help
+            SG90 PWM via LEDC. Default: GPIO14 (non-strapping).
+
+    config PIN_DFPLAYER_TX
+        int "DFPlayer UART TX (ESP -> DFPlayer RX)"
+        range 0 30
+        default 18
+        help
+            UART1 TX to DFPlayer RX. Default: GPIO18.
+
+    config PIN_DFPLAYER_RX
+        int "DFPlayer UART RX (-1 = unused)"
+        range -1 30
+        default 19
+        help
+            UART1 RX from DFPlayer. Default: GPIO19. Set -1 for TX-only.
+
+endmenu

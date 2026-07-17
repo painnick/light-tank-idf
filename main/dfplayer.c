@@ -11,12 +11,12 @@
 
 static const char* TAG = "dfplayer";
 
-/* 핀 설정 (ESP32-C3)
- * 주의: GPIO20 = 기본 UART0 RX (콘솔). DFPlayer RX로 쓰면 시리얼 로그가 끊길 수 있음.
- * GPIO21 = 기본 UART0 TX. 둘 다 피한다.
+/* 핀: menuconfig → RC Tank Hardware Pins
+ * C6 Super Mini 기본 TX=18 / RX=19. RX=-1 이면 TX 전용(피드백 태스크 미생성).
+ * 피하기: GPIO8/9(strap·BOOT·RGB), 12/13(USB), 15(strap).
  */
-#define PIN_DFPLAYER_TX  10
-#define PIN_DFPLAYER_RX  9
+#define PIN_DFPLAYER_TX  CONFIG_PIN_DFPLAYER_TX
+#define PIN_DFPLAYER_RX  CONFIG_PIN_DFPLAYER_RX
 
 #define UART_NUM         UART_NUM_1
 #define UART_BAUD        9600
@@ -137,19 +137,25 @@ esp_err_t dfplayer_init(void) {
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
+        .source_clk = UART_SCLK_DEFAULT,
     };
     esp_err_t ret = uart_param_config(UART_NUM, &uart_config);
     if (ret != ESP_OK) return ret;
-    ret = uart_set_pin(UART_NUM, PIN_DFPLAYER_TX, PIN_DFPLAYER_RX, -1, -1);
+
+    const int rx_pin = (PIN_DFPLAYER_RX < 0) ? UART_PIN_NO_CHANGE : PIN_DFPLAYER_RX;
+    ret = uart_set_pin(UART_NUM, PIN_DFPLAYER_TX, rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     if (ret != ESP_OK) return ret;
-    ret = uart_driver_install(UART_NUM, UART_BUF_SIZE, UART_BUF_SIZE, 0, NULL, 0);
+
+    const int rx_buf = (PIN_DFPLAYER_RX < 0) ? 0 : UART_BUF_SIZE;
+    ret = uart_driver_install(UART_NUM, UART_BUF_SIZE, rx_buf, 0, NULL, 0);
     if (ret != ESP_OK) return ret;
 
     vTaskDelay(pdMS_TO_TICKS(200));
 
-    xTaskCreate(dfplayer_task, "dfplayer_rx", 2048, NULL, 5, NULL);
-    ESP_LOGD(TAG, "DFPlayer 초기화 완료");
+    if (PIN_DFPLAYER_RX >= 0) {
+        xTaskCreate(dfplayer_task, "dfplayer_rx", 2048, NULL, 5, NULL);
+    }
+    ESP_LOGI(TAG, "DFPlayer init TX=%d RX=%d", PIN_DFPLAYER_TX, PIN_DFPLAYER_RX);
     return ESP_OK;
 }
 

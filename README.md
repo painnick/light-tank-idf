@@ -1,9 +1,9 @@
 # panzer2-idf
 
-ESP32-C3 기반 RC 탱크 펌웨어입니다.  
+ESP32-C6 Super Mini 기반 RC 탱크 펌웨어입니다.  
 BLE 게임패드로 **캐터필러 주행**, **터렛 회전**, **포/기관총 효과**, **DFPlayer 효과음**을 제어합니다.
 
-Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.2 로 포팅한 버전이며, 입력은 [Bluepad32](https://github.com/ricardoquesada/bluepad32) + BTstack 를 사용합니다.
+Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포팅한 뒤 **ESP32-C6 Super Mini** 로 이전한 버전이며, 입력은 [Bluepad32](https://github.com/ricardoquesada/bluepad32) + BTstack 를 사용합니다.
 
 ## 기능
 
@@ -18,32 +18,35 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.2 로 포�
 
 ## 하드웨어
 
-- **MCU**: ESP32-C3 (BLE only — Classic BT 미지원)
+- **MCU**: ESP32-C6 Super Mini (BLE — Classic BT 미사용)
 - **모터 드라이버**: DRV8833
 - **서보**: SG90 (터렛)
 - **오디오**: DFPlayer Mini + microSD
 - **입력**: BLE HID 게임패드 (검증: GamePadPlus V3 / ShanWan BM-769)
 
-### 핀맵
+### 핀맵 (C6 Super Mini PCB 기본값)
 
-| 기능 | GPIO |
-|------|------|
-| 좌측 트랙 IN1 / IN2 | 4 / 3 |
-| 우측 트랙 IN1 / IN2 | 0 / 5 |
-| 포신 LED | 1 |
-| 게틀링 LED | 6 |
-| 터렛 서보 | 7 |
-| DFPlayer TX / RX | 10 / 9 |
+핀은 **Kconfig** 로 관리합니다. 변경: `idf.py menuconfig` → **RC Tank Hardware Pins**.
 
-> GPIO20/21은 ESP32-C3 기본 UART0 콘솔용입니다. DFPlayer RX는 **GPIO9**를 사용합니다.
+| 기능 (넷) | GPIO (기본) |
+|-----------|-------------|
+| 우측 트랙 IN1 / IN2 (Motor-IN-A1/A2) | 0 / 1 |
+| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | 2 / 3 |
+| 포신 LED (CannonLED) | 6 |
+| 게틀링 / 헤드라이트 (HeadLight) | 7 |
+| 터렛 서보 (TurretServo) | 14 |
+| DFPlayer TX / RX | 18 / 19 |
+
+**피해야 할 핀 (C6 Super Mini):** GPIO8 (RGB+strap), GPIO9 (BOOT), GPIO12/13 (USB), GPIO15 (strap). 모터는 strapping GPIO4/5를 기본으로 쓰지 않습니다.  
+DFPlayer RX를 안 쓰면 menuconfig에서 **-1** 로 두면 TX 전용으로 동작합니다.
 
 ### PCB
 
-회로 개략도는 `pcb/` 에 있습니다.
+`pcb/` 의 스케매틱 이미지는 **C3 Super Mini 시절** 참고용입니다. 현재 펌웨어 핀맵 기준은 위 표와 `main/Kconfig.projbuild` 입니다. C6 Super Mini 는 핀 수·배치가 달라 **신규 PCB** 가 필요합니다.
 
 | 파일 | 설명 |
 |------|------|
-| `pcb/Schematic_M3-Stuart_2026-07-11.png` | M3 Stuart 스케매틱 |
+| `pcb/Schematic_M3-Stuart_2026-07-11.png` | M3 Stuart 스케매틱 (C3 레거시 참고) |
 
 ### 3D 출력 (`3dp/`)
 
@@ -98,7 +101,7 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.2 로 포�
 
 ## 게임패드 연결 (중요)
 
-ESP32-C3는 **BLE만** 지원합니다. DualShock 등 Classic BT 전용 패드는 연결되지 않습니다.
+이 펌웨어는 **BLE HID** 경로를 사용합니다. DualShock 등 Classic BT 전용 패드는 연결되지 않습니다.
 
 ### GamePadPlus V3 / Terios T3 / ShanWan BM-769
 
@@ -124,12 +127,13 @@ ESP32-C3는 **BLE만** 지원합니다. DualShock 등 Classic BT 전용 패드�
 
 ```
 main/
-  main.c           # 모터/서보/LED, 게임패드 처리, 제어 루프
-  my_platform.c    # Bluepad32 커스텀 플랫폼, 공유 입력 상태
-  dfplayer.c/.h    # DFPlayer Mini UART 제어
+  main.c              # 모터/서보/LED, 게임패드 처리, 제어 루프
+  my_platform.c       # Bluepad32 커스텀 플랫폼, 공유 입력 상태
+  dfplayer.c/.h       # DFPlayer Mini UART 제어
+  Kconfig.projbuild   # 하드웨어 핀 (menuconfig)
 components/
-  bluepad32/       # Bluepad32 (커스텀 Simple HOG 포함)
-  btstack/         # BTstack ESP32 포트
+  bluepad32/          # Bluepad32 (커스텀 Simple HOG 포함)
+  btstack/            # BTstack ESP32 포트
 ```
 
 - **bt_main**: BTstack 런 루프 (우선순위 높음)
@@ -139,8 +143,8 @@ components/
 
 ### 요구 사항
 
-- [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/v5.5.2/esp32c3/get-started/index.html)
-- 타깃: `esp32c3`
+- [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/v5.5.2/esp32c6/get-started/index.html)
+- 타깃: `esp32c6`
 
 ### 환경 설정 (Windows 예)
 
@@ -148,10 +152,18 @@ components/
 REM ESP-IDF export (경로는 설치에 맞게 수정)
 call C:\Espressif\frameworks\esp-idf-v5.5.2\export.bat
 
-cd panzer2-idf
-idf.py set-target esp32c3
+cd light-tank-idf
+idf.py set-target esp32c6
 idf.py build
 idf.py -p COMx flash monitor
+```
+
+핀만 바꿀 때:
+
+```bat
+idf.py menuconfig
+REM → RC Tank Hardware Pins
+idf.py build
 ```
 
 `setup.bat` / `setup.sh` 로 Bluepad32·BTstack 의존성을 준비할 수 있습니다 (이미 `components/` 가 포함되어 있으면 생략 가능).
@@ -161,6 +173,7 @@ idf.py -p COMx flash monitor
 - BLE 컨트롤러 only (`CONFIG_BT_CONTROLLER_ONLY`)
 - Wi-Fi 비활성
 - Bluepad32 커스텀 플랫폼
+- 공통: `sdkconfig.defaults` / C6: `sdkconfig.defaults.esp32c6`
 - 기본 로그 레벨: INFO (상세 BLE 단계는 DEBUG)
 
 ## 라이선스 관련
@@ -172,5 +185,6 @@ idf.py -p COMx flash monitor
 ## 참고
 
 - [Bluepad32 문서](https://bluepad32.readthedocs.io/)
-- [ESP-IDF](https://docs.espressif.com/projects/esp-idf/)
+- [ESP-IDF ESP32-C6](https://docs.espressif.com/projects/esp-idf/en/v5.5.2/esp32c6/)
+- 설계: `docs/superpowers/specs/2026-07-17-esp32c6-super-mini-migration-design.md`
 - 원본: M3Stuart_ESP32C3 (Arduino/PlatformIO)

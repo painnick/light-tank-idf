@@ -1,7 +1,8 @@
-// RC 탱크 - ESP-IDF v5.5.2
+// RC 탱크 - ESP-IDF v5.5.x / ESP32-C6 Super Mini
 // Original: M3Stuart_ESP32C3 (Arduino/PlatformIO)
 //
 // Bluepad32 게임패드로 DRV8833 모터 트랙 + SG90 서보 터렛 + DFPlayer 효과음 제어
+// 핀 번호: idf.py menuconfig → "RC Tank Hardware Pins"
 
 #include <string.h>
 #include <math.h>
@@ -27,15 +28,15 @@ void gamepad_state_init(void);
 static const char* TAG = "RC_TANK";
 
 // ============================================================================
-// 핀 정의
+// 핀 정의 (Kconfig — ESP32-C6 Super Mini PCB 기본값)
 // ============================================================================
-#define PIN_LEFT_IN1        4   // DRV8833 좌측 트랙 IN1
-#define PIN_LEFT_IN2        3   // DRV8833 좌측 트랙 IN2
-#define PIN_RIGHT_IN1       0   // DRV8833 우측 트랙 IN1
-#define PIN_RIGHT_IN2       5   // DRV8833 우측 트랙 IN2
-#define PIN_CANNON_LED      1   // 포신 LED
-#define PIN_MG_LED          6   // 게틀링(기관총) LED
-#define PIN_TURRET_SERVO    7   // 터렛 SG90 서보
+#define PIN_LEFT_IN1        CONFIG_PIN_LEFT_IN1
+#define PIN_LEFT_IN2        CONFIG_PIN_LEFT_IN2
+#define PIN_RIGHT_IN1       CONFIG_PIN_RIGHT_IN1
+#define PIN_RIGHT_IN2       CONFIG_PIN_RIGHT_IN2
+#define PIN_CANNON_LED      CONFIG_PIN_CANNON_LED
+#define PIN_MG_LED          CONFIG_PIN_MG_LED
+#define PIN_TURRET_SERVO    CONFIG_PIN_TURRET_SERVO
 
 // ============================================================================
 // LEDC 채널/타이머 할당
@@ -758,7 +759,7 @@ void app_main(void) {
     // 게임패드 상태 뮤프스 생성 (BTstack보다 먼저)
     gamepad_state_init();
 
-    // 제어 태스크 (BTstack보다 낮은 우선순위 — ESP32-C3 단일 코어에서 BLE 안정성)
+    // 제어 태스크 (BTstack보다 낮은 우선순위 — C6 단일 코어에서 BLE 안정성)
     xTaskCreate(control_task, "tank_ctrl", 4096, NULL, 4, NULL);
 
     // BTstack 메인 태스크 (높은 우선순위, 코어 0)
