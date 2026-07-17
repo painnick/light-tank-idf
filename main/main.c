@@ -158,6 +158,10 @@ static bool g_volume_changed = false;
 // Start 버튼 (터렛 중앙) 엣지 감지
 static bool g_start_pressed = false;
 
+// Y 버튼: 헤드라이트 토글 (길게 눌러도 1회만 — rising edge)
+static bool g_y_pressed = false;
+static bool g_headlight_on = false;
+
 // 현재 시간 (us)
 static inline int64_t now_us(void) {
     return esp_timer_get_time();
@@ -478,6 +482,18 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
         g_start_pressed = false;
     }
 
+    // Y: 헤드라이트 On/Off (press edge only — hold 시 재토글 없음)
+    if (buttons & BUTTON_Y) {
+        if (!g_y_pressed) {
+            g_y_pressed = true;
+            g_headlight_on = !g_headlight_on;
+            gpio_set_level(PIN_HEADLIGHT, g_headlight_on ? 1 : 0);
+            ESP_LOGI(TAG, "헤드라이트 %s", g_headlight_on ? "ON" : "OFF");
+        }
+    } else {
+        g_y_pressed = false;
+    }
+
     // B 버튼: LED·효과음 먼저, 반동은 RECOIL_DELAY_MS 후 process_recoil()
     if ((buttons & BUTTON_B) && !g_cannon_firing && !g_machinegun_firing
             && !g_recoil_pending && !g_recoil_active) {
@@ -648,7 +664,8 @@ static void control_task(void* arg) {
             vTaskDelay(pdMS_TO_TICKS(100));
             dfplayer_set_volume(g_current_volume);
             dfplayer_play(DFPLAYER_TRACK_CONNECTED);
-            gpio_set_level(PIN_HEADLIGHT, 1);
+            // 헤드라이트는 Y 토글 — 연결 시 자동 ON 하지 않음
+            g_y_pressed = false;
             ESP_LOGI(TAG, "게임패드 연결됨");
         }
 
@@ -661,6 +678,8 @@ static void control_task(void* arg) {
             turret_detach();
             g_machinegun_firing = false;
             g_mg_led_on = false;
+            g_y_pressed = false;
+            g_headlight_on = false;
             gpio_set_level(PIN_MG_LED, 0);
             gpio_set_level(PIN_CANNON_LED, 0);
             gpio_set_level(PIN_HEADLIGHT, 0);

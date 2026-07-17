@@ -41,8 +41,8 @@ PCB 라우팅: **좌측**에 모터·LED, **우측**에 서보·DFPlayer TX.
 | DFPlayer TX (→ DFPlayer RX) | 18 | 우 |
 | DFPlayer RX | **미사용 (-1)** | — |
 
-헤드라이트는 게임패드 연결 시 ON, 해제 시 OFF입니다. 게틀링 LED는 A 버튼 발사 시에만 깜빡입니다.  
-DFPlayer는 **TX 전용** (피드백 배선 없음).
+헤드라이트는 **Y 버튼**으로 On/Off 토글합니다 (rising edge — 길게 눌러도 깜빡이지 않음). 패드 해제 시 소등.  
+게틀링 LED는 A 버튼 발사 시에만 깜빡입니다. DFPlayer는 **TX 전용** (피드백 배선 없음).
 
 **피해야 할 핀 (C6 Super Mini):** GPIO8 (RGB+strap), GPIO9 (BOOT), GPIO12/13 (USB), GPIO15 (strap). 모터는 strapping GPIO4/5를 기본으로 쓰지 않습니다.
 
@@ -86,6 +86,7 @@ DFPlayer는 **TX 전용** (피드백 배선 없음).
 | Start | 터렛 서보 중앙(90°) |
 | A | 게틀링(기관총) — LED 75ms 깜빡임, 약 0.5초 |
 | B | 포신 — LED·효과음 후 리코일(후진) |
+| Y | 헤드라이트 On/Off 토글 (길게 눌러도 1회만) |
 | L1 / R1 | 볼륨 감소 / 증가 |
 
 ### 터렛 서보

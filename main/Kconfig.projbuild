@@ -49,7 +49,7 @@ menu "RC Tank Hardware Pins"
         default 22
         help
             Headlight LED. Default GPIO22 (left header cluster).
-            On while gamepad is connected; off when disconnected.
+            Toggled by gamepad Y button (edge); off on disconnect.
 
     config PIN_TURRET_SERVO
         int "Turret servo PWM (TurretServo)"
