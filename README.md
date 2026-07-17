@@ -28,25 +28,24 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 
 핀은 **Kconfig** 로 관리합니다. 변경: `idf.py menuconfig` → **RC Tank Hardware Pins**.
 
+보드를 **뒤집어서** 장착하는 PCB 레이아웃 기준 기본값입니다.
+
 | 기능 (넷) | GPIO (기본) |
 |-----------|-------------|
-| 헤드라이트 (HeadLight) | **0** |
-| 포신 LED (CannonLED) | **1** |
-| 게틀링 LED (MG) | **2** |
-| 우측 트랙 IN1 / IN2 (Motor-IN-A1/A2) | **14 / 18** |
-| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | 19 / 20 |
-| **DRV8833 nSLEEP** | **23** |
-| 터렛 서보 (TurretServo) | **21** |
-| DFPlayer TX (→ DFPlayer RX) | **22** |
+| 우측 트랙 IN1 / IN2 (Motor-IN-A1/A2) | **0 / 1** |
+| 좌측 트랙 IN1 / IN2 (Motor-IN-B1/B2) | **2 / 3** |
+| **DRV8833 nSLEEP** | **6** |
+| 헤드라이트 (HeadLight) | **20** |
+| 포신 LED (CannonLED) | **19** |
+| 게틀링 LED (MG) | **18** |
+| 터렛 서보 (TurretServo) | 21 |
+| DFPlayer TX (→ DFPlayer RX) | 22 |
 | DFPlayer RX | **미사용 (-1)** |
 
 **nSLEEP:** LOW=슬립(출력 Hi-Z), HIGH=동작. 부팅 직후 LOW → 모터 IN/PWM 준비 후 HIGH. 패드 해제 시 LOW, 재연결 시 HIGH.  
-PCB: nSLEEP(GPIO23) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
+PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 헤드라이트는 **Y 버튼** 토글. 게틀링은 A. DFPlayer는 **TX 전용**.
-
-> 우측 모터가 14/18을 쓰므로 서보·DFPlayer 기본값은 21/22입니다 (menuconfig로 변경 가능).  
-> 좌측 트랙은 19/20 유지 (요청에 14·18만 명시).
 
 ### 스트래핑 핀 & 주의 핀 (ESP32-C6 / Super Mini)
 
@@ -77,12 +76,12 @@ PCB: nSLEEP(GPIO23) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 | 상태 | GPIO |
 |------|------|
-| **사용 중** | LED **0/1/2**, 모터 **14/18/19/20**, nSLEEP **23**, 서보 **21**, DF TX **22** |
-| **의도적 미사용** | 3, 4, 5, 6, 7, 8, 9, 12, 13, 15, 16, 17 + DFPlayer RX |
-| **여유 (확장)** | 3, 6, 7 등 (strap/USB 아님) |
+| **사용 중** | 모터 **0–3**, nSLEEP **6**, LED **20/19/18**, 서보 **21**, DF TX **22** |
+| **의도적 미사용** | 4, 5, 7, 8, 9, 12, 13, 14, 15, 16, 17, 23 + DFPlayer RX |
+| **여유 (확장)** | 7, 14, 23 등 (strap/USB 아님) |
 
 **PCB 팁:**
-- **nSLEEP (GPIO23) ~10k pull-down** — 부팅·리셋 시 드라이버 sleep.
+- **nSLEEP (GPIO6) ~10k pull-down** — 부팅·리셋 시 드라이버 sleep.
 - IN×4 pull-down은 선택. nSLEEP이 VCC 고정 모듈이면 IN pull-down 필수.
 - 스트래핑 핀(4/5/8/9/15)에 강한 외장 pull 금지.
 - 깨우기 순서: IN/PWM=0 → nSLEEP HIGH.
