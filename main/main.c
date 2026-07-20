@@ -39,6 +39,46 @@ static const char* TAG = "RC_TANK";
 #define PIN_MG_LED          CONFIG_PIN_MG_LED
 #define PIN_HEADLIGHT       CONFIG_PIN_HEADLIGHT
 #define PIN_TURRET_SERVO    CONFIG_PIN_TURRET_SERVO
+#define PIN_DFPLAYER_TX     CONFIG_PIN_DFPLAYER_TX
+#define PIN_DFPLAYER_RX     CONFIG_PIN_DFPLAYER_RX
+
+// ============================================================================
+// 핀 설정 빌드 타임 검증 (menuconfig 실수를 컴파일 시점에 차단)
+// ============================================================================
+// 금지: 8/9 (strap·BOOT·온보드 RGB), 12/13 (USB Serial/JTAG), 15 (strap), 24-30 (낸드 플래시)
+#define PIN_FORBIDDEN(p) \
+    ((p) == 8 || (p) == 9 || (p) == 12 || (p) == 13 || (p) == 15 || ((p) >= 24 && (p) <= 30))
+
+#define ASSERT_PIN_USABLE(pin) \
+    _Static_assert(!PIN_FORBIDDEN(pin), "RC Tank pin on boot/USB/flash GPIO — see README strapping table")
+
+ASSERT_PIN_USABLE(PIN_LEFT_IN1);
+ASSERT_PIN_USABLE(PIN_LEFT_IN2);
+ASSERT_PIN_USABLE(PIN_RIGHT_IN1);
+ASSERT_PIN_USABLE(PIN_RIGHT_IN2);
+ASSERT_PIN_USABLE(PIN_MOTOR_NSLEEP);
+ASSERT_PIN_USABLE(PIN_CANNON_LED);
+ASSERT_PIN_USABLE(PIN_MG_LED);
+ASSERT_PIN_USABLE(PIN_HEADLIGHT);
+ASSERT_PIN_USABLE(PIN_TURRET_SERVO);
+ASSERT_PIN_USABLE(PIN_DFPLAYER_TX);
+_Static_assert(PIN_DFPLAYER_RX < 0 || !PIN_FORBIDDEN(PIN_DFPLAYER_RX),
+               "DFPlayer RX on boot/USB/flash GPIO");
+
+// 모터 핀은 4/5 (JTAG/strapping) 도 금지 — 부팅 샘플링 중 모터 글리치
+_Static_assert(PIN_LEFT_IN1 != 4 && PIN_LEFT_IN1 != 5, "Left IN1 on strapping GPIO4/5");
+_Static_assert(PIN_LEFT_IN2 != 4 && PIN_LEFT_IN2 != 5, "Left IN2 on strapping GPIO4/5");
+_Static_assert(PIN_RIGHT_IN1 != 4 && PIN_RIGHT_IN1 != 5, "Right IN1 on strapping GPIO4/5");
+_Static_assert(PIN_RIGHT_IN2 != 4 && PIN_RIGHT_IN2 != 5, "Right IN2 on strapping GPIO4/5");
+
+// 중복 할당 검출: 사용 핀 10개의 비트마스크 popcount가 10이어야 함 (GCC 내장 함수, 상수 평가됨)
+#define PIN_USAGE_MASK                                                                      \
+    ((1u << PIN_LEFT_IN1) | (1u << PIN_LEFT_IN2) | (1u << PIN_RIGHT_IN1) |                  \
+     (1u << PIN_RIGHT_IN2) | (1u << PIN_MOTOR_NSLEEP) | (1u << PIN_CANNON_LED) |            \
+     (1u << PIN_MG_LED) | (1u << PIN_HEADLIGHT) | (1u << PIN_TURRET_SERVO) |                \
+     (1u << PIN_DFPLAYER_TX))
+_Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 10,
+               "Duplicate GPIO assignment in RC Tank Hardware Pins");
 
 // ============================================================================
 // LEDC 채널/타이머 할당
