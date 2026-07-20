@@ -409,17 +409,18 @@ static void hog_notification_handler(uint8_t packet_type, uint16_t channel, uint
 
     uint16_t value_handle = gatt_event_notification_get_value_handle(packet);
     uint8_t report_id = 0;
-    int idx = -1;
     int i;
     for (i = 0; i < hog_notify_count; i++) {
         if (hog_notify_chars[i].value_handle == value_handle) {
             report_id = hog_notify_report_ids[i];
-            idx = i;
             break;
         }
     }
 
     // HOGP notifications omit Report ID; HID parser needs it when the map has 0x85 items.
+    // report_id == 0 means the descriptor has no Report ID items, so the raw
+    // report already matches the parser layout (prefixing a synthetic ID would
+    // shift every field by one byte and inject phantom button presses).
     uint8_t buf[128];
     const uint8_t* parse_ptr = report;
     uint16_t parse_len = report_len;
@@ -432,16 +433,6 @@ static void hog_notification_handler(uint8_t packet_type, uint16_t channel, uint
     }
 
     uni_hid_parse_input_report(device, parse_ptr, parse_len);
-
-    // Fallback: synthetic report id if still no activity.
-    if (device->controller.klass == UNI_CONTROLLER_CLASS_GAMEPAD && device->controller.gamepad.buttons == 0 &&
-        device->controller.gamepad.dpad == 0 && device->controller.gamepad.axis_y == 0 &&
-        device->controller.gamepad.axis_ry == 0 && report_id == 0 && report_len + 1 <= sizeof(buf)) {
-        buf[0] = (idx >= 0) ? (uint8_t)(idx + 1) : 1;
-        memcpy(buf + 1, report, report_len);
-        uni_hid_parse_input_report(device, buf, (uint16_t)(report_len + 1));
-    }
-
     uni_hid_device_process_controller(device);
 }
 
