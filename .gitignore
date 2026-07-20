@@ -7,6 +7,7 @@ sdkconfig.old
 .idea/
 .vscode/
 .mimocode/
+.commandcode/
 *.user
 *.suo
 .DS_Store
