@@ -78,7 +78,6 @@ static bool is_scanning;
 static bool ble_enabled;
 
 // Temporal space for SDP in BLE
-static uint8_t hid_descriptor_storage[HID_MAX_DESCRIPTOR_LEN * CONFIG_BLUEPAD32_MAX_DEVICES];
 static btstack_packet_callback_registration_t sm_event_callback_registration;
 
 // ---------------------------------------------------------------------------
@@ -172,11 +171,6 @@ static btstack_timer_source_t hog_ccc_timeout_timer;
 static bool hog_report_map_got_value = false;
 static uint8_t hog_ccc_enable_value[2] = {0x01, 0x00};  // notifications on
 
-static void uni_hids_client_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t* packet, uint16_t size);
-static void uni_device_information_packet_handler(uint8_t packet_type,
-                                                  uint16_t channel,
-                                                  uint8_t* packet,
-                                                  uint16_t size);
 static void schedule_hog_setup(hci_con_handle_t con_handle);
 static void hog_disconnect(hci_con_handle_t con_handle);
 static void hog_reset_session(void);
@@ -192,9 +186,6 @@ static void hog_step_read_map(btstack_timer_source_t* ts);
 static void hog_skip_report_map_and_enable_ccc(const char* reason);
 static void hog_apply_fallback_descriptor(hci_con_handle_t con_handle);
 static void hog_assign_report_ids_from_descriptor(uni_hid_device_t* device);
-
-// Alias used by older call sites in this file
-#define schedule_hids_client_connect schedule_hog_setup
 
 /**
  * Connect to remote device but set timer for timeout
@@ -801,13 +792,8 @@ static void hog_disconnect(hci_con_handle_t con_handle) {
 
     device = uni_hid_device_get_instance_for_connection_handle(con_handle);
     if (device) {
-        // Only call hids_client_disconnect if legacy path was used
-        if (device->hids_cid != 0 && device->hids_cid != 0xffff && device->hids_cid != HOG_SIMPLE_CID) {
-            uint8_t status = hids_client_disconnect(device->hids_cid);
-            if (status != ERROR_CODE_SUCCESS) {
-                loge("Failed to disconnect HIDS client for hids_cid=%d, status=%d\n", device->hids_cid, status);
-            }
-        }
+        // Simple HOG only: hids_cid is HOG_SIMPLE_CID or 0xffff, never a
+        // legacy hids_client cid, so no client disconnect is needed here.
         device->hids_cid = 0xffff;
     }
 
@@ -901,341 +887,6 @@ static void adv_event_get_data(const uint8_t* packet, uint16_t* appearance, char
 
     // if (!ad_data_contains_uuid16(ad_len, ad_data, ORG_BLUETOOTH_SERVICE_HUMAN_INTERFACE_DEVICE))
     get_advertisement_data(ad_data, ad_len, appearance, name);
-}
-
-static void parse_report(const uint8_t* packet, uint16_t size) {
-    uint16_t service_index;
-    uint16_t hids_cid;
-    uni_hid_device_t* device;
-    const uint8_t* descriptor_data;
-    uint16_t descriptor_len;
-    const uint8_t* report_data;
-    uint16_t report_len;
-
-    ARG_UNUSED(size);
-
-    service_index = gattservice_subevent_hid_report_get_service_index(packet);
-    hids_cid = gattservice_subevent_hid_report_get_hids_cid(packet);
-    device = uni_hid_device_get_instance_for_hids_cid(hids_cid);
-
-    if (!device) {
-        loge("BLE parser report: Invalid device for hids_cid=%d\n", hids_cid);
-        return;
-    }
-
-    // FIXME: Copying the HID descriptor should be done at setup time since some device, like Xbox requires it
-    // to set the correct parser.
-    // But not clear how to get the "service_index" from setup
-    if (device->hid_descriptor_len == 0) {
-        descriptor_data = hids_client_descriptor_storage_get_descriptor_data(hids_cid, service_index);
-        descriptor_len = hids_client_descriptor_storage_get_descriptor_len(hids_cid, service_index);
-
-        uni_hid_device_set_hid_descriptor(device, descriptor_data, descriptor_len);
-    }
-    report_data = gattservice_subevent_hid_report_get_report(packet);
-    report_len = gattservice_subevent_hid_report_get_report_len(packet);
-
-    uni_hid_parse_input_report(device, report_data, report_len);
-    uni_hid_device_process_controller(device);
-}
-
-static void uni_hids_client_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t* packet, uint16_t size) {
-    uint8_t status;
-    uint16_t hids_cid;
-    uni_hid_device_t* device;
-    uint8_t event_type;
-    hid_protocol_mode_t protocol_mode;
-
-    ARG_UNUSED(packet_type);
-    ARG_UNUSED(channel);
-    ARG_UNUSED(size);
-
-#if 0
-    // FIXME: Bug in BTStack??? This comparison fails because packet_type is HCI_EVENT_GATTSERVICE_META
-    if (packet_type != HCI_EVENT_PACKET) {
-        loge("uni_hids_client_packet_handler: unsupported packet type: %#x\n", packet_type);
-        return;
-    }
-#endif
-
-    event_type = hci_event_packet_get_type(packet);
-    if (event_type != HCI_EVENT_GATTSERVICE_META) {
-        loge("uni_hids_client_packet_handler: unsupported event type: %#x\n", event_type);
-        return;
-    }
-
-    switch (hci_event_gattservice_meta_get_subevent_code(packet)) {
-        case GATTSERVICE_SUBEVENT_HID_SERVICE_CONNECTED:
-            status = gattservice_subevent_hid_service_connected_get_status(packet);
-            logi("GATTSERVICE_SUBEVENT_HID_SERVICE_CONNECTED, status=0x%02x\n", status);
-            switch (status) {
-                case ERROR_CODE_SUCCESS:
-                    protocol_mode = gattservice_subevent_hid_service_connected_get_protocol_mode(packet);
-                    logi("HID service client connected, found %d services, protocol_mode=%d\n",
-                         gattservice_subevent_hid_service_connected_get_num_instances(packet), protocol_mode);
-
-                    // XXX TODO: store device as bonded
-                    hids_cid = gattservice_subevent_hid_service_connected_get_hids_cid(packet);
-                    device = uni_hid_device_get_instance_for_hids_cid(hids_cid);
-                    if (!device) {
-                        loge("Hids Cid: Could not find valid device for hids_cid=%d\n", hids_cid);
-                        break;
-                    }
-#if 0
-                    status = hids_client_enable_notifications(hids_cid);
-                    if (status != ERROR_CODE_SUCCESS)
-                        logi("Failed to enable client notifications for hids_cid=%d, status=%#x\n", hids_cid, status);
-                    else
-                        logi("Client notifications enabled for for hids_cid=%d\n", hids_cid);
-#endif
-
-                    uni_hid_device_guess_controller_type_from_pid_vid(device);
-                    uni_hid_device_connect(device);
-                    uni_hid_device_set_ready(device);
-
-                    // Optional: fill VID/PID after HID is ready (non-blocking for input).
-                    if (device->vendor_id == 0 || device->product_id == 0) {
-                        uint8_t di_status = device_information_service_client_query(
-                            device->conn.handle, uni_device_information_packet_handler);
-                        if (di_status != ERROR_CODE_SUCCESS) {
-                            logi("Post-HID DIS query skipped, status=%#x\n", di_status);
-                        }
-                    }
-
-                    resume_scanning_hint();
-                    break;
-                default:
-                    loge("HID service client connection failed, err 0x%02x.\n", status);
-                    hids_cid = gattservice_subevent_hid_service_connected_get_hids_cid(packet);
-                    device = uni_hid_device_get_instance_for_hids_cid(hids_cid);
-                    if (device) {
-                        // Stale bonding often leaves HIDS discovery stuck — force re-pair next time.
-                        gap_delete_bonding(BD_ADDR_TYPE_LE_PUBLIC, device->conn.btaddr);
-                        gap_delete_bonding(BD_ADDR_TYPE_LE_RANDOM, device->conn.btaddr);
-                        hog_disconnect(device->conn.handle);
-                    }
-                    break;
-            }
-            break;
-
-        case GATTSERVICE_SUBEVENT_HID_REPORT:
-            logd("GATTSERVICE_SUBEVENT_HID_REPORT\n");
-            parse_report(packet, size);
-            break;
-        case GATTSERVICE_SUBEVENT_HID_INFORMATION:
-            logi(
-                "Hid Information: service index %d, USB HID 0x%02X, country code %d, remote wake %d, normally "
-                "connectable %d\n",
-                gattservice_subevent_hid_information_get_service_index(packet),
-                gattservice_subevent_hid_information_get_base_usb_hid_version(packet),
-                gattservice_subevent_hid_information_get_country_code(packet),
-                gattservice_subevent_hid_information_get_remote_wake(packet),
-                gattservice_subevent_hid_information_get_normally_connectable(packet));
-            break;
-
-        case GATTSERVICE_SUBEVENT_HID_PROTOCOL_MODE:
-            logi("Protocol Mode: service index %d, mode 0x%02X (Boot mode: 0x%02X, Report mode 0x%02X)\n",
-                 gattservice_subevent_hid_protocol_mode_get_service_index(packet),
-                 gattservice_subevent_hid_protocol_mode_get_protocol_mode(packet), HID_PROTOCOL_MODE_BOOT,
-                 HID_PROTOCOL_MODE_REPORT);
-            break;
-
-        case GATTSERVICE_SUBEVENT_HID_SERVICE_REPORTS_NOTIFICATION:
-            if (gattservice_subevent_hid_service_reports_notification_get_configuration(packet) == 0) {
-                logi("Reports disabled\n");
-            } else {
-                logi("Reports enabled\n");
-            }
-            break;
-#if 0  // Does not compile on Pico SDK 1.5.1. Enable it only if needed.
-        case GATTSERVICE_SUBEVENT_HID_REPORT_WRITTEN:
-            // Called when a client a hid report was written.
-            // E.g.: "set rumble" was sent to the gamepad.
-            // TODO: Inform the device that it is ready to write another hid report?
-            break;
-#endif
-        default:
-            logi("Unsupported gatt client event: 0x%02x\n", hci_event_gattservice_meta_get_subevent_code(packet));
-            break;
-    }
-}
-
-static void uni_device_information_packet_handler(uint8_t packet_type,
-                                                  uint16_t channel,
-                                                  uint8_t* packet,
-                                                  uint16_t size) {
-    uint8_t code;
-    uint8_t status;
-    uint8_t att_status;
-    hci_con_handle_t con_handle;
-    uni_hid_device_t* device;
-    uint8_t event_type;
-
-    UNUSED(channel);
-    UNUSED(size);
-
-    if (packet_type != HCI_EVENT_PACKET) {
-        loge("uni_device_information_packet_handler: unsupported packet type: %#x\n", packet_type);
-        return;
-    }
-
-    event_type = hci_event_packet_get_type(packet);
-    if (event_type != HCI_EVENT_GATTSERVICE_META) {
-        loge("uni_device_information_packet_handler: unsupported event type: %#x\n", event_type);
-        return;
-    }
-
-    code = hci_event_gattservice_meta_get_subevent_code(packet);
-    switch (code) {
-        case GATTSERVICE_SUBEVENT_SCAN_PARAMETERS_SERVICE_CONNECTED:
-            logi("PnP ID: vendor source ID 0x%02X, vendor ID 0x%02X, product ID 0x%02X, product version 0x%02X\n",
-                 gattservice_subevent_device_information_pnp_id_get_vendor_source_id(packet),
-                 gattservice_subevent_device_information_pnp_id_get_vendor_id(packet),
-                 gattservice_subevent_device_information_pnp_id_get_product_id(packet),
-                 gattservice_subevent_device_information_pnp_id_get_product_version(packet));
-            break;
-
-        case GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_DONE:
-            status = gattservice_subevent_device_information_done_get_att_status(packet);
-            con_handle = gattservice_subevent_device_information_done_get_con_handle(packet);
-            switch (status) {
-                case ERROR_CODE_SUCCESS:
-                    logi("Device Information service found\n");
-                    device = uni_hid_device_get_instance_for_connection_handle(con_handle);
-                    if (!device) {
-                        loge("Invalid device for in GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_DONE");
-                        break;
-                    }
-                    // Post-HID DIS path only: do not start HID again from here.
-                    if (device->hids_cid == 0 || device->hids_cid == 0xffff) {
-                        schedule_hids_client_connect(con_handle);
-                    }
-                    break;
-                default:
-                    logi("Device Information service client connection failed, error=%#x.\n", status);
-                    device = uni_hid_device_get_instance_for_connection_handle(con_handle);
-                    if (device && (device->hids_cid == 0 || device->hids_cid == 0xffff)) {
-                        schedule_hids_client_connect(con_handle);
-                    }
-                    break;
-            }
-            break;
-        case GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_MANUFACTURER_NAME:
-            att_status = gattservice_subevent_device_information_manufacturer_name_get_att_status(packet);
-            if (att_status != ATT_ERROR_SUCCESS) {
-                logi("Manufacturer Name read failed, ATT Error 0x%02x\n", att_status);
-            } else {
-                logi("Manufacturer Name: %s\n",
-                     gattservice_subevent_device_information_manufacturer_name_get_value(packet));
-            }
-            break;
-        case GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_MODEL_NUMBER:
-            att_status = gattservice_subevent_device_information_model_number_get_att_status(packet);
-            if (att_status != ATT_ERROR_SUCCESS) {
-                logi("Model Number read failed, ATT Error 0x%02x\n", att_status);
-            } else {
-                logi("Model Number:     %s\n", gattservice_subevent_device_information_model_number_get_value(packet));
-            }
-            break;
-
-        case GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_SERIAL_NUMBER:
-            att_status = gattservice_subevent_device_information_serial_number_get_att_status(packet);
-            if (att_status != ATT_ERROR_SUCCESS) {
-                logi("Serial Number read failed, ATT Error 0x%02x\n", att_status);
-            } else {
-                logi("Serial Number:    %s\n", gattservice_subevent_device_information_serial_number_get_value(packet));
-            }
-            break;
-
-        case GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_HARDWARE_REVISION:
-            att_status = gattservice_subevent_device_information_hardware_revision_get_att_status(packet);
-            if (att_status != ATT_ERROR_SUCCESS) {
-                logi("Hardware Revision read failed, ATT Error 0x%02x\n", att_status);
-            } else {
-                logi("Hardware Revision: %s\n",
-                     gattservice_subevent_device_information_hardware_revision_get_value(packet));
-            }
-            break;
-
-        case GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_FIRMWARE_REVISION:
-            att_status = gattservice_subevent_device_information_firmware_revision_get_att_status(packet);
-            if (att_status != ATT_ERROR_SUCCESS) {
-                logi("Firmware Revision read failed, ATT Error 0x%02x\n", att_status);
-            } else {
-                logi("Firmware Revision: %s\n",
-                     gattservice_subevent_device_information_firmware_revision_get_value(packet));
-            }
-            break;
-
-        case GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_SOFTWARE_REVISION:
-            att_status = gattservice_subevent_device_information_software_revision_get_att_status(packet);
-            if (att_status != ATT_ERROR_SUCCESS) {
-                logi("Software Revision read failed, ATT Error 0x%02x\n", att_status);
-            } else {
-                logi("Software Revision: %s\n",
-                     gattservice_subevent_device_information_software_revision_get_value(packet));
-            }
-            break;
-
-        case GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_SYSTEM_ID:
-            att_status = gattservice_subevent_device_information_system_id_get_att_status(packet);
-            if (att_status != ATT_ERROR_SUCCESS) {
-                logi("System ID read failed, ATT Error 0x%02x\n", att_status);
-            } else {
-                uint32_t manufacturer_identifier_low =
-                    gattservice_subevent_device_information_system_id_get_manufacturer_id_low(packet);
-                uint8_t manufacturer_identifier_high =
-                    gattservice_subevent_device_information_system_id_get_manufacturer_id_high(packet);
-
-                logi("Manufacturer ID:  0x%02x%08x\n", manufacturer_identifier_high, manufacturer_identifier_low);
-                logi("Organizationally Unique ID:  0x%06x\n",
-                     gattservice_subevent_device_information_system_id_get_organizationally_unique_id(packet));
-            }
-            break;
-
-        case GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_IEEE_REGULATORY_CERTIFICATION:
-            att_status = gattservice_subevent_device_information_ieee_regulatory_certification_get_att_status(packet);
-            if (att_status != ATT_ERROR_SUCCESS) {
-                logi("IEEE Regulatory Certification read failed, ATT Error 0x%02x\n", att_status);
-            } else {
-                logi("value_a:          0x%04x\n",
-                     gattservice_subevent_device_information_ieee_regulatory_certification_get_value_a(packet));
-                logi("value_b:          0x%04x\n",
-                     gattservice_subevent_device_information_ieee_regulatory_certification_get_value_b(packet));
-            }
-            break;
-
-        case GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_PNP_ID:
-            con_handle = gattservice_subevent_device_information_pnp_id_get_con_handle(packet);
-            device = uni_hid_device_get_instance_for_connection_handle(con_handle);
-            if (!device) {
-                loge("Invalid device for in GATTSERVICE_SUBEVENT_DEVICE_INFORMATION_PNP_ID");
-                break;
-            }
-
-            att_status = gattservice_subevent_device_information_pnp_id_get_att_status(packet);
-            if (att_status != ATT_ERROR_SUCCESS) {
-                logi("PNP ID read failed, ATT Error 0x%02x\n", att_status);
-            } else {
-                logi("Vendor Source ID: 0x%02x\n",
-                     gattservice_subevent_device_information_pnp_id_get_vendor_source_id(packet));
-                logi("Vendor  ID:       0x%04x\n",
-                     gattservice_subevent_device_information_pnp_id_get_vendor_id(packet));
-                logi("Product ID:       0x%04x\n",
-                     gattservice_subevent_device_information_pnp_id_get_product_id(packet));
-                logi("Product Version:  0x%04x\n",
-                     gattservice_subevent_device_information_pnp_id_get_product_version(packet));
-            }
-            uni_hid_device_set_vendor_id(device, gattservice_subevent_device_information_pnp_id_get_vendor_id(packet));
-            uni_hid_device_set_product_id(device,
-                                          gattservice_subevent_device_information_pnp_id_get_product_id(packet));
-
-            break;
-
-        default:
-            logi("Unknown gattservice meta subevent code: %#x\n", code);
-            break;
-    }
 }
 
 /* HCI packet handler
@@ -1616,10 +1267,7 @@ void uni_bt_le_setup(void) {
     // libusb works with mostly any configuration
 
     gatt_client_init();
-    hids_client_init(hid_descriptor_storage, sizeof(hid_descriptor_storage));
-    // FIXME: this is an empty function and PicoW toolchain is removing empty function (?)
-    // scan_parameters_service_client_init();
-    device_information_service_client_init();
+    // Simple HOG path does not use hids_client / device_information clients.
 
     gap_set_scan_parameters(0 /* type: passive */, 48 /* interval */, 48 /* window */);
 }
