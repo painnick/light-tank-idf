@@ -13,8 +13,9 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 | 터렛 | SG90 서보 — 패드 연결 시 attach, D-Pad 좌우 회전, 3초 무입력/해제 시 detach |
 | 포신 | B 버튼 — LED·효과음 후 트랙 후진 리코일 |
 | 게틀링(기관총) | A 버튼 — 게틀링 LED 깜빡임 + 효과음 |
-| 볼륨 | L1 / R1, NVS에 저장 |
+| 볼륨 | L1 / R1 (홀드 시 100ms마다 1단계, 즉시 반영), 릴리스 시 NVS 저장 |
 | 사운드 | DFPlayer Mini (대기 / 포 / 기관총 / 연결음) |
+| 안전 | 연결 해제 시 모터 드라이버 sleep / 리포트 1초 무수신 시 트랙 정지 (failsafe) |
 
 ## 하드웨어
 
@@ -149,6 +150,8 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 ## 게임패드 연결 (중요)
 
 이 펌웨어는 **BLE HID** 경로를 사용합니다. DualShock 등 Classic BT 전용 패드는 연결되지 않습니다.
+
+**한 번에 1대의 패드만** 연결됩니다. 패드가 준비되면 스캔이 멈추고, 연결이 끊기면 다시 스캔합니다 (Simple HOG 상태 머신은 단일 인스턴스 — 2대째 연결 시 첫 패드 입력이 끊기는 문제 방지).
 
 ### GamePadPlus V3 / Terios T3 / ShanWan BM-769
 
