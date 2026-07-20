@@ -72,8 +72,6 @@ static const char* TAG = "RC_TANK";
 #define IDLE_SOUND_RETRY_INTERVAL_MS  3000
 #define IDLE_SOUND_MAX_RETRIES        5
 #define VOLUME_CHANGE_INTERVAL  100
-#define BUTTON_SWAP_HOLD_MS     3000
-#define EEPROM_RESET_HOLD_MS    3000
 #define CANNON_LED_DURATION     200
 #define MACHINE_GUN_DURATION    500   // panzer4 MG_FIRE_MS
 #define MG_LED_BLINK_MS         75    // panzer4 게틀링 LED 깜빡임 주기

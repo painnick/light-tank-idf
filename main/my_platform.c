@@ -8,8 +8,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-static const char* TAG = "platform";
-
 //
 // 공유 상태: BT 콜백 ↔ 제어 태스크 간 데이터 교환
 //
