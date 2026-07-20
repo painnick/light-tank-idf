@@ -67,7 +67,10 @@ static const char* TAG = "RC_TANK";
 // 타이밍 상수 (ms)
 // ============================================================================
 #define LOOP_INTERVAL_MS        10
-#define IDLE_SOUND_INTERVAL_MS  13000
+// DFPlayer loop 모드는 자체 반복되므로 재전송하면 트랙이 처음부터 다시 시작된다.
+// 부팅/SD 초기화 중 명령 유실에 대비해 짧은 간격으로 몇 번만 재전송한다.
+#define IDLE_SOUND_RETRY_INTERVAL_MS  3000
+#define IDLE_SOUND_MAX_RETRIES        5
 #define VOLUME_CHANGE_INTERVAL  100
 #define BUTTON_SWAP_HOLD_MS     3000
 #define EEPROM_RESET_HOLD_MS    3000
@@ -148,6 +151,7 @@ static int64_t g_mg_led_last_toggle = 0;
 
 // 효과음
 static int64_t g_last_idle_sound_time = 0;
+static int g_idle_sound_retries = 0;
 
 // 볼륨 조절
 static bool g_l1_pressed = false;
@@ -636,13 +640,22 @@ static void process_recoil(void) {
     g_recoil_active = false;
 }
 
+static void start_idle_sound(void) {
+    dfplayer_play_loop(DFPLAYER_TRACK_IDLE);
+    g_last_idle_sound_time = now_ms();
+    g_idle_sound_retries = 0;
+}
+
+// loop 재생이 이미 진행 중이면 재전송으로 트랙이 재시작되므로,
+// DFPlayer SD 초기화 구간(명령 유실 가능) 동안에만 재전송한다.
 static void process_idle_sound(void) {
     if (gamepad_is_connected()) return;
-    if (g_cannon_firing || g_machinegun_firing) return;
+    if (g_idle_sound_retries >= IDLE_SOUND_MAX_RETRIES) return;
 
-    if (now_ms() - g_last_idle_sound_time >= IDLE_SOUND_INTERVAL_MS) {
+    if (now_ms() - g_last_idle_sound_time >= IDLE_SOUND_RETRY_INTERVAL_MS) {
         dfplayer_play_loop(DFPLAYER_TRACK_IDLE);
         g_last_idle_sound_time = now_ms();
+        g_idle_sound_retries++;
     }
 }
 
@@ -684,8 +697,7 @@ static void control_task(void* arg) {
         // 연결 해제 직후: 정리 (서보 포함)
         if (prev_connected && !cur_connected) {
             dfplayer_set_volume(15); // initialVolume
-            dfplayer_play_loop(DFPLAYER_TRACK_IDLE);
-            g_last_idle_sound_time = now_ms();
+            start_idle_sound();
             set_track_immediate(0, 0);
             motor_driver_set_enabled(false); // nSLEEP LOW — 부팅 외 안전 컷오프
             turret_detach();
@@ -797,8 +809,7 @@ void app_main(void) {
     } else {
         dfplayer_set_volume(g_current_volume);
         vTaskDelay(pdMS_TO_TICKS(200));
-        dfplayer_play_loop(DFPLAYER_TRACK_IDLE);
-        g_last_idle_sound_time = now_ms();
+        start_idle_sound();
     }
 
     ESP_LOGI(TAG, "초기화 완료 — BTstack 시작");
