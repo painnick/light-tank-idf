@@ -1,7 +1,7 @@
 # Design: ESP32-C3 Super Mini → ESP32-C6 Super Mini Migration
 
 **Date:** 2026-07-17  
-**Status:** Approved for implementation planning  
+**Status:** Implemented — final PCB schematic updated 2026-07-20
 **Project:** panzer2-idf / light-tank-idf
 
 ## Summary
@@ -52,25 +52,27 @@ Safe preferred I/O: **0, 1, 2, 3, 6, 7, 14, 18, 19, 20, 21, 22, 23**.
 
 C6 Super Mini is taller and has a different pinout than C3 Super Mini; a **new PCB** is required (confirmed).
 
-## Default pin map (C6 Super Mini PCB)
+## Default pin map (final C6 Super Mini PCB)
 
-Net names match the existing M3 Stuart schematic where possible.
+Net names match `pcb/Schematic_Light-Tank_2026-07-20.png` and `main/Kconfig.projbuild`.
 
 | Net / function | Kconfig symbol | Default GPIO | PCB rationale |
 |----------------|----------------|--------------|---------------|
-| Motor-IN-A1 (Right IN1) | `PIN_RIGHT_IN1` | **0** | Contiguous left-side cluster for DRV8833 |
-| Motor-IN-A2 (Right IN2) | `PIN_RIGHT_IN2` | **1** | Adjacent motor pin |
-| Motor-IN-B1 (Left IN1) | `PIN_LEFT_IN1` | **2** | Adjacent motor pin |
-| Motor-IN-B2 (Left IN2) | `PIN_LEFT_IN2` | **3** | Adjacent motor pin |
-| CannonLED | `PIN_CANNON_LED` | **6** | Simple digital out near motors |
-| HeadLight / MG LED | `PIN_MG_LED` | **7** | Adjacent digital out |
-| TurretServo | `PIN_TURRET_SERVO` | **14** | Right side, non-strapping, LEDC PWM |
-| MP3 / DFPlayer TX | `PIN_DFPLAYER_TX` | **18** | Right-side UART pair |
-| DFPlayer RX (optional) | `PIN_DFPLAYER_RX` | **19** | Adjacent to TX; set `-1` if unused |
+| Motor-IN-A1 (Right IN1) | `PIN_RIGHT_IN1` | **3** | Left-side motor cluster routed to DRV8833 IN1 |
+| Motor-IN-A2 (Right IN2) | `PIN_RIGHT_IN2` | **2** | Left-side motor cluster routed to DRV8833 IN2 |
+| Motor-IN-B1 (Left IN1) | `PIN_LEFT_IN1` | **1** | Left-side motor cluster routed to DRV8833 IN3 |
+| Motor-IN-B2 (Left IN2) | `PIN_LEFT_IN2` | **0** | Left-side motor cluster routed to DRV8833 IN4 |
+| DRV8833 nSLEEP | `PIN_MOTOR_NSLEEP` | **6** | Driver enable with boot-time pull-down |
+| HeadLight | `PIN_HEADLIGHT` | **20** | MOSFET Q1 gate for headlight connector |
+| CannonLED | `PIN_CANNON_LED` | **19** | Cannon LED connector |
+| GatlingLED | `PIN_MG_LED` | **18** | Gatling LED connector |
+| TurretServo | `PIN_TURRET_SERVO` | **21** | SG90 PWM signal on turret connector |
+| MP3-RX / DFPlayer TX | `PIN_DFPLAYER_TX` | **22** | TX-only command path to DFPlayer RX |
+| DFPlayer RX (optional) | `PIN_DFPLAYER_RX` | **-1** | Not wired on the final PCB |
 
-**PCB recommendation:** Weak pull-downs on DRV8833 IN1–IN4 so tracks stay off while GPIOs are high-Z at reset.
+**PCB recommendation:** Add a weak pull-down (~10k) on DRV8833 nSLEEP so tracks stay off while GPIOs are high-Z at reset. Pull-downs on IN1–IN4 are optional when nSLEEP is held low.
 
-**Spare GPIOs for future revs:** 20, 21, 22, 23 (and carefully 4/5 if strapping is handled).
+**Expansion / spare GPIOs:** EXT2 uses GPIO23 and EXT3 uses GPIO7. GPIO14 remains unassigned. Avoid using strapping, USB, and flash pins listed above.
 
 ## Configuration approach
 
@@ -122,8 +124,8 @@ Regenerate `sdkconfig` via `set-target` rather than hand-editing C3 leftovers.
 
 ### Documentation
 
-- `README.md`: MCU, pin table, build target `esp32c6`, note BLE-only (C6 still no Classic BT for this stack path), PCB redesign note.
-- Optional: short comment in `pcb/` README that schematic image is C3-era reference; pin map source of truth is Kconfig + this design doc.
+- `README.md`: MCU, final pin table, build target `esp32c6`, BLE-only note, and current PCB schematic.
+- `pcb/Schematic_Light-Tank_2026-07-20.png`: final C6 Super Mini PCB schematic. The C3-era M3 Stuart image was removed.
 
 ## Peripheral / stack notes
 
@@ -156,4 +158,4 @@ Regenerate `sdkconfig` via `set-target` rather than hand-editing C3 leftovers.
 | Pin config | Kconfig (menuconfig) |
 | C3 support | Dropped (C6 only) |
 | Structure | Kconfig pins + `sdkconfig.defaults.esp32c6` |
-| Default pin cluster | Motors 0–3, LEDs 6/7, servo 14, DFPlayer 18/19 |
+| Default pin cluster | Motors 3/2/1/0, nSLEEP 6, LEDs 20/19/18, servo 21, DFPlayer TX 22, RX -1 |

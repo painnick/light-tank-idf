@@ -4,6 +4,8 @@
 
 **Goal:** Migrate panzer2-idf from ESP32-C3 Super Mini to ESP32-C6 Super Mini only, with PCB-friendly default pins fully configurable via Kconfig.
 
+> **2026-07-20 PCB revision:** The provisional defaults in this historical plan were superseded by the final PCB. Current defaults are right track **3/2**, left track **1/0**, nSLEEP **6**, headlight **20**, cannon **19**, gatling **18**, servo **21**, DFPlayer TX **22**, RX **-1**. See `README.md`, `main/Kconfig.projbuild`, and `pcb/Schematic_Light-Tank_2026-07-20.png`.
+
 **Architecture:** Expose all actuator/UART GPIO numbers in `main/Kconfig.projbuild`. Application code (`main.c`, `dfplayer.c`) reads `CONFIG_PIN_*` only. Shared settings stay in `sdkconfig.defaults`; C6-specific BT/CPU options live in `sdkconfig.defaults.esp32c6`. Rebuild with `idf.py set-target esp32c6`.
 
 **Tech Stack:** ESP-IDF v5.5.x, Bluepad32 + BTstack (controller-only BLE), LEDC, UART1, FreeRTOS.
@@ -12,7 +14,7 @@
 
 - Target: **esp32c6 only** (no C3 dual support).
 - Pin config: **Kconfig menuconfig** (`RC Tank Hardware Pins`).
-- Default pin map: motors **0/1/2/3**, cannon **6**, MG **7**, servo **14**, DFPlayer TX/RX **18/19**.
+- Default pin map: right track **3/2**, left track **1/0**, nSLEEP **6**, headlight **20**, cannon **19**, MG **18**, servo **21**, DFPlayer TX/RX **22/-1**.
 - Avoid app use of GPIO 8, 9, 12, 13, 15 (and prefer not 4/5 for motors).
 - Spec: `docs/superpowers/specs/2026-07-17-esp32c6-super-mini-migration-design.md`.
 - DFPlayer: `UART_SCLK_DEFAULT`; RX may be `-1` (TX-only).
@@ -302,7 +304,7 @@ git commit -m "build: retarget project to esp32c6"
 - Pin table → C6 defaults + note “change via `idf.py menuconfig` → RC Tank Hardware Pins”
 - Build: `idf.py set-target esp32c6`
 - Link IDF docs for esp32c6
-- Note: `pcb/Schematic_*.png` is C3-era reference; firmware pin map is Kconfig
+- Note: `pcb/Schematic_Light-Tank_2026-07-20.png` is the current C6 PCB schematic; firmware pin map is Kconfig
 
 - [ ] **Step 2: Full rebuild smoke check**
 
@@ -327,7 +329,7 @@ git commit -m "docs: document ESP32-C6 Super Mini pin map and build"
 |------------------|------|
 | Target esp32c6 only | 4 |
 | Kconfig pins | 1, 2 |
-| Default map 0/1/2/3, 6, 7, 14, 18, 19 | 1 |
+| Final default map 3/2, 1/0, 6, 20/19/18, 21, 22/-1 | 1 |
 | sdkconfig.defaults + .esp32c6 | 3 |
 | dfplayer UART_SCLK_DEFAULT / RX -1 | 2 |
 | README | 5 |

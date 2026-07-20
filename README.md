@@ -89,11 +89,19 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 ### PCB
 
-`pcb/` 의 스케매틱 이미지는 **C3 Super Mini 시절** 참고용입니다. 현재 펌웨어 핀맵 기준은 위 표와 `main/Kconfig.projbuild` 입니다. C6 Super Mini 는 핀 수·배치가 달라 **신규 PCB** 가 필요합니다.
+`pcb/Schematic_Light-Tank_2026-07-20.png` 가 현재 ESP32-C6 Super Mini 기준 스케매틱입니다. 핀 배정은 위 표와 `main/Kconfig.projbuild` 가 기준이며, 회로도 넷 이름도 같은 이름을 사용합니다.
 
 | 파일 | 설명 |
 |------|------|
-| `pcb/Schematic_M3-Stuart_2026-07-11.png` | M3 Stuart 스케매틱 (C3 레거시 참고) |
+| `pcb/Schematic_Light-Tank_2026-07-20.png` | Light Tank C6 Super Mini 스케매틱 (2026-07-20) |
+
+**주요 연결:**
+- **DRV8833**: `MT1`/`MT2` 모터 커넥터, 입력 `Motor-IN-A1/A2/B1/B2`, `nSLEEP`=GPIO6
+- **터렛**: `TURRET` 커넥터 — 신호 GPIO21, 5V, GND
+- **사운드**: DFPlayer Mini — ESP32 TX(GPIO22) → DFPlayer RX, `SPK` 스피커 커넥터
+- **조명**: 헤드라이트 GPIO20 + Q1(IRLML6344), 포신/게틀링 LED GPIO19/18
+- **확장**: `EXT2`(GPIO23), `EXT3`(GPIO7) — 5V/GND 포함
+- **전원**: 배터리 → BoostCharger(U3) → 전원 스위치(U4) → 5V/VCC/GND
 
 ### 3D 출력 (`3dp/`)
 
