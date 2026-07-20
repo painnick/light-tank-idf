@@ -4,6 +4,7 @@
 #include <string.h>
 #include "uni.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -20,6 +21,8 @@ typedef struct {
     uint16_t buttons;
     uint8_t dpad;
     uint8_t misc_buttons;
+
+    int64_t last_report_ms; // 마지막 컨트롤러 리포트 수신 시각 (failsafe용)
 
     bool connected;
     bool new_connection;
@@ -93,6 +96,7 @@ static void my_platform_on_device_disconnected(uni_hid_device_t* d) {
         g_gamepad.axis_y = 0;
         g_gamepad.axis_ry = 0;
         g_gamepad.misc_buttons = 0;
+        g_gamepad.last_report_ms = 0;
         xSemaphoreGive(g_gamepad.mutex);
     }
 }
@@ -110,6 +114,7 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t* d) {
         g_gamepad.buttons = 0;
         g_gamepad.dpad = 0;
         g_gamepad.misc_buttons = 0;
+        g_gamepad.last_report_ms = esp_timer_get_time() / 1000; // 연결 직후를 stale로 오인하지 않게
         g_gamepad.connected = true;
         g_gamepad.new_connection = true;
         xSemaphoreGive(g_gamepad.mutex);
@@ -131,6 +136,7 @@ static void my_platform_on_controller_data(uni_hid_device_t* d, uni_controller_t
         g_gamepad.buttons = gp->buttons;
         g_gamepad.dpad = gp->dpad;
         g_gamepad.misc_buttons = gp->misc_buttons;
+        g_gamepad.last_report_ms = esp_timer_get_time() / 1000;
         xSemaphoreGive(g_gamepad.mutex);
     }
 }
@@ -196,6 +202,15 @@ bool gamepad_read_new_connection(void) {
     if (xSemaphoreTake(g_gamepad.mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
         ret = g_gamepad.new_connection;
         g_gamepad.new_connection = false;
+        xSemaphoreGive(g_gamepad.mutex);
+    }
+    return ret;
+}
+
+int64_t gamepad_last_report_ms(void) {
+    int64_t ret = 0;
+    if (xSemaphoreTake(g_gamepad.mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        ret = g_gamepad.last_report_ms;
         xSemaphoreGive(g_gamepad.mutex);
     }
     return ret;

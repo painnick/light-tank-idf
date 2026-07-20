@@ -80,6 +80,7 @@ static const char* TAG = "RC_TANK";
 #define TURRET_STEP_INTERVAL_MS 120   // 터렛 1° 이동 간격 (ms) — 아주 느리게
 #define TURRET_IDLE_DISCONNECT_MS 3000 // 터렛 무입력 시 서보 연결 해제 (ms)
 #define GAMEPAD_CONNECT_GRACE_MS  500 // 연결 직후 입력 무시 (노이즈/잔여 D-Pad 방지)
+#define GAMEPAD_INPUT_TIMEOUT_MS  1000 // 리포트 무수신 시 트랙 정지 failsafe (연결은 유지 가정)
 #define RECOIL_DELAY_MS         250   // LED·효과음 후 반동 시작 지연 (ms)
 #define RECOIL_BACK_DURATION    40    // 포 발사 시 후진 시간 (ms)
 #define RECOIL_SETTLE_DURATION  40    // 후진 후 정지 안정화 (ms)
@@ -105,6 +106,7 @@ static const char* TAG = "RC_TANK";
 // ============================================================================
 extern bool gamepad_is_connected(void);
 extern bool gamepad_read_new_connection(void);
+extern int64_t gamepad_last_report_ms(void);
 extern bool gamepad_read(int32_t* axis_y, int32_t* axis_ry, uint16_t* buttons,
                          uint8_t* dpad, uint8_t* misc_buttons);
 
@@ -662,6 +664,7 @@ static void control_task(void* arg) {
     uint8_t dpad, misc_buttons;
 
     bool prev_connected = false;
+    bool prev_input_stale = false;
 
     while (1) {
         bool cur_connected = gamepad_is_connected();
@@ -706,9 +709,22 @@ static void control_task(void* arg) {
 
         // 게임패드 데이터 처리
         if (cur_connected) {
-            if (gamepad_read(&axis_y, &axis_ry, &buttons, &dpad, &misc_buttons)) {
+            // 연결은 유효한데 리포트가 끊긴 상태(BT 스택 행 등) — 마지막
+            // 스틱 값으로 모터가 계속 돌지 않도록 트랙만 정지시킨다.
+            bool input_stale = (now_ms() - gamepad_last_report_ms()) > GAMEPAD_INPUT_TIMEOUT_MS;
+            if (input_stale) {
+                if (!g_recoil_active) {
+                    set_track_targets(0, 0);
+                }
+                if (!prev_input_stale) {
+                    ESP_LOGW(TAG, "게임패드 입력 타임아웃 — 트랙 정지");
+                }
+            } else if (gamepad_read(&axis_y, &axis_ry, &buttons, &dpad, &misc_buttons)) {
                 process_gamepad(axis_y, axis_ry, buttons, dpad, misc_buttons);
             }
+            prev_input_stale = input_stale;
+        } else {
+            prev_input_stale = false;
         }
 
         process_cannon_firing();
