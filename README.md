@@ -213,7 +213,7 @@ REM → RC Tank Hardware Pins
 idf.py build
 ```
 
-`setup.bat` / `setup.sh` 로 Bluepad32·BTstack 의존성을 준비할 수 있습니다 (이미 `components/` 가 포함되어 있으면 생략 가능).
+Bluepad32·BTstack은 Simple HOG 커스텀이 포함된 채로 `components/` 에 벤더링되어 있습니다. 별도 설정 스크립트 없이 클론 후 바로 빌드하면 됩니다.
 
 ### 주요 sdkconfig
 
