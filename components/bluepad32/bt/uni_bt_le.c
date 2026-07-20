@@ -280,7 +280,10 @@ static void hog_finish_ready(hci_con_handle_t con_handle) {
     uni_hid_device_guess_controller_type_from_pid_vid(device);
     uni_hid_device_connect(device);
     uni_hid_device_set_ready(device);
-    resume_scanning_hint();
+    // Single-gamepad tank: do NOT resume scanning while a pad is ready.
+    // The Simple HOG state machine is single-instance; connecting a 2nd pad
+    // would reset the session and kill the 1st pad's input. Scanning resumes
+    // on disconnect (uni_bt_le_on_hci_disconnection_complete / hog_disconnect).
 }
 
 static void hog_step_enable_ccc(btstack_timer_source_t* ts) {
