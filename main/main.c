@@ -117,7 +117,6 @@ static nvs_handle_t g_nvs_handle;
 
 // DFPlayer
 static int g_current_volume = 20;
-static int g_temp_volume = 20;
 
 // 트랙 모터 (목표 속도 vs 램프 현재 속도)
 static int g_target_left_speed = 0;
@@ -158,7 +157,7 @@ static bool g_l1_pressed = false;
 static bool g_r1_pressed = false;
 static int64_t g_l1_last_change = 0;
 static int64_t g_r1_last_change = 0;
-static bool g_volume_changed = false;
+static bool g_volume_dirty = false;
 
 // Start 버튼 (터렛 중앙) 엣지 감지
 static bool g_start_pressed = false;
@@ -189,7 +188,6 @@ static void load_volume_from_nvs(void) {
         ESP_LOGI(TAG, "NVS 볼륨 로드: %d", stored);
     }
     g_current_volume = (int)stored;
-    g_temp_volume = (int)stored;
 }
 
 static void save_volume_to_nvs(int vol) {
@@ -530,54 +528,48 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
         dfplayer_play(DFPLAYER_TRACK_MACHINEGUN);
     }
 
-    // L1: 볼륨 감소
+    // L1: 볼륨 감소 (홀드 중 100ms마다 1단계, 즉시 반영 / 릴리스 시 NVS 저장)
     if (buttons & BUTTON_SHOULDER_L) {
         if (!g_l1_pressed) {
             g_l1_pressed = true;
-            g_temp_volume = g_current_volume;
-            g_l1_last_change = now_ms();
+            g_l1_last_change = 0; // 첫 스텝 즉시 적용
         }
-        if (g_temp_volume > 11 && (now_ms() - g_l1_last_change >= VOLUME_CHANGE_INTERVAL)) {
-            g_temp_volume--;
+        if (now_ms() - g_l1_last_change >= VOLUME_CHANGE_INTERVAL) {
             g_l1_last_change = now_ms();
-        }
-    } else {
-        if (g_l1_pressed) {
-            g_l1_pressed = false;
-            if (g_temp_volume != g_current_volume) {
-                g_current_volume = g_temp_volume;
+            if (g_current_volume > 11) {
+                g_current_volume--;
                 dfplayer_set_volume(g_current_volume);
-                g_volume_changed = true;
+                g_volume_dirty = true;
             }
+        }
+    } else if (g_l1_pressed) {
+        g_l1_pressed = false;
+        if (g_volume_dirty) {
+            g_volume_dirty = false;
+            save_volume_to_nvs(g_current_volume);
         }
     }
 
-    // R1: 볼륨 증가
+    // R1: 볼륨 증가 (L1과 동일)
     if (buttons & BUTTON_SHOULDER_R) {
         if (!g_r1_pressed) {
             g_r1_pressed = true;
-            g_temp_volume = g_current_volume;
-            g_r1_last_change = now_ms();
+            g_r1_last_change = 0; // 첫 스텝 즉시 적용
         }
-        if (g_temp_volume < 30 && (now_ms() - g_r1_last_change >= VOLUME_CHANGE_INTERVAL)) {
-            g_temp_volume++;
+        if (now_ms() - g_r1_last_change >= VOLUME_CHANGE_INTERVAL) {
             g_r1_last_change = now_ms();
-        }
-    } else {
-        if (g_r1_pressed) {
-            g_r1_pressed = false;
-            if (g_temp_volume != g_current_volume) {
-                g_current_volume = g_temp_volume;
+            if (g_current_volume < 30) {
+                g_current_volume++;
                 dfplayer_set_volume(g_current_volume);
-                g_volume_changed = true;
+                g_volume_dirty = true;
             }
         }
-    }
-
-    // 볼륨 변경 시 NVS 저장
-    if (g_volume_changed) {
-        save_volume_to_nvs(g_current_volume);
-        g_volume_changed = false;
+    } else if (g_r1_pressed) {
+        g_r1_pressed = false;
+        if (g_volume_dirty) {
+            g_volume_dirty = false;
+            save_volume_to_nvs(g_current_volume);
+        }
     }
 }
 
