@@ -1,4 +1,4 @@
-# panzer2-idf
+# light-tank-idf
 
 ESP32-C6 Super Mini 기반 RC 탱크 펌웨어입니다.  
 BLE 게임패드로 **캐터필러 주행**, **터렛 회전**, **포/기관총 효과**, **DFPlayer 효과음**을 제어합니다.
