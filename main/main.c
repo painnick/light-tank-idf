@@ -696,7 +696,7 @@ static void control_task(void* arg) {
 
         // 연결 해제 직후: 정리 (서보 포함)
         if (prev_connected && !cur_connected) {
-            dfplayer_set_volume(15); // initialVolume
+            dfplayer_set_volume(g_current_volume); // 부팅 시와 동일하게 설정 볼륨 유지
             start_idle_sound();
             set_track_immediate(0, 0);
             motor_driver_set_enabled(false); // nSLEEP LOW — 부팅 외 안전 컷오프
