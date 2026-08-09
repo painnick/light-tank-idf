@@ -60,11 +60,19 @@ menu "RC Tank Hardware Pins"
             Gatling LED. Default GPIO18.
 
     config PIN_TURRET_SERVO
-        int "Turret servo PWM (TurretServo)"
+        int "Turret yaw servo PWM (left/right)"
         range 0 30
         default 21
         help
-            SG90 PWM via LEDC. Default: GPIO21.
+            Turret horizontal (yaw) SG90 PWM. Default: GPIO21.
+
+    config PIN_TURRET_PITCH
+        int "Turret pitch servo PWM (up/down)"
+        range 0 30
+        default 23
+        help
+            Turret elevation (pitch) SG90 PWM. Default: GPIO23.
+            Center 90 on connect; D-Pad up/down steps of 10 deg; idle detach 3s.
 
     config PIN_DFPLAYER_TX
         int "DFPlayer UART TX (ESP -> DFPlayer RX)"

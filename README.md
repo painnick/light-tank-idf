@@ -10,7 +10,8 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 | 기능 | 설명 |
 |------|------|
 | 트랙 구동 | DRV8833, 좌/우 스틱 Y축 — panzer4식 가속/감속 램프(~1초 최대) |
-| 터렛 | SG90 서보 — 0.1° 단위 연속 슬루(~10°/s), 3초 무입력 시 detach |
+| 터렛 좌우 | SG90 — D-Pad ←/→ 연속 슬루, 3초 무입력 detach |
+| 터렛 상하 | SG90(GPIO23) — 연결 시 90°, D-Pad ↑/↓ **10°** 스텝, 3초 무입력 detach |
 | 포신 | B 버튼 — LED·효과음 후 트랙 후진 리코일 |
 | 게틀링(기관총) | A 버튼 — 게틀링 LED 깜빡임 + 효과음 |
 | 볼륨 | L1 / R1 (홀드 시 100ms마다 1단계, 즉시 반영), 릴리스 시 NVS 저장 |
@@ -21,7 +22,7 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 
 - **MCU**: ESP32-C6 Super Mini (BLE — Classic BT 미사용)
 - **모터 드라이버**: DRV8833
-- **서보**: SG90 (터렛)
+- **서보**: SG90 ×2 (좌우 yaw GPIO21, 상하 pitch GPIO23)
 - **오디오**: DFPlayer Mini + microSD
 - **입력**: BLE HID 게임패드 (검증: GamePadPlus V3 / ShanWan BM-769)
 
@@ -39,7 +40,8 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 | 헤드라이트 (HeadLight) | **20** |
 | 포신 LED (CannonLED) | **19** |
 | 게틀링 LED (MG) | **18** |
-| 터렛 서보 (TurretServo) | 21 |
+| 터렛 좌우 서보 (yaw) | 21 |
+| 터렛 상하 서보 (pitch) | **23** |
 | DFPlayer TX (→ DFPlayer RX) | 22 |
 | DFPlayer RX | **미사용 (-1)** |
 
@@ -97,10 +99,11 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 **주요 연결:**
 - **DRV8833**: `MT1`/`MT2` 모터 커넥터, 입력 `Motor-IN-A1/A2/B1/B2`, `nSLEEP`=GPIO6
-- **터렛**: `TURRET` 커넥터 — 신호 GPIO21, 5V, GND
+- **터렛 좌우**: `TURRET` — 신호 GPIO21, 5V, GND
+- **터렛 상하**: pitch 서보 — 신호 **GPIO23**, 5V, GND
 - **사운드**: DFPlayer Mini — ESP32 TX(GPIO22) → DFPlayer RX, `SPK` 스피커 커넥터
 - **조명**: 헤드라이트 GPIO20 + Q1(IRLML6344), 포신/게틀링 LED GPIO19/18
-- **확장**: `EXT2`(GPIO23), `EXT3`(GPIO7) — 5V/GND 포함
+- **확장**: `EXT3`(GPIO7) 등
 - **전원**: 배터리 → BoostCharger(U3) → 전원 스위치(U4) → 5V/VCC/GND
 
 ### 3D 출력 (`3dp/`)
@@ -131,22 +134,28 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 |------|------|
 | 좌 스틱 Y | 좌측 트랙 전/후진 (즉시 최대 아님, ~1초 램프 가속) |
 | 우 스틱 Y | 우측 트랙 전/후진 (동일) |
-| D-Pad ← / → | 터렛 좌/우 회전 (0°~180°, 누르는 동안 ~10°/s 연속, 0.1° 보간) |
-| Start | 터렛 서보 중앙(90°) |
+| D-Pad ← / → | 터렛 **좌/우** 회전 (연속 슬루) |
+| D-Pad ↑ / ↓ | 터렛 **상하** 10° 스텝 (0°~180°, 연결 시 90°) |
+| Start | 좌우·상하 서보 중앙(90°) |
 | A | 게틀링(기관총) — LED 75ms 깜빡임, 약 0.5초 |
 | B | 포신 — LED·효과음 후 리코일(후진) |
 | Y | 헤드라이트 On/Off 토글 (길게 눌러도 1회만) |
 | L1 / R1 | 볼륨 감소 / 증가 |
 
-### 터렛 서보
+### 터렛 좌우 (yaw, GPIO21)
 
-- **부팅**: 서보 미연결 (PWM 없음)
-- **게임패드 연결 시**: 서보 attach 후 **중앙(90°)** (즉시)
-- **게임패드 해제 시**: 서보 detach
-- **부드럽게 회전**: 내부 **0.1°(x10)** 단위. D-Pad 유지 시 매 10ms 목표 ±0.1° (`TURRET_HOLD_X10_PER_LOOP`),  
-  PWM `current`는 매 10ms 최대 0.2° 따라감 (`TURRET_SLEW_X10_PER_LOOP`) → 이전처럼 100ms마다 1° 점프 후 대기하지 않음
-- **Start / 연결**: 목표·출력을 90°로 즉시 맞춤
-- **무입력 해제**: 홀드 종료·슬루 완료 후 `TURRET_IDLE_DISCONNECT_MS`(기본 **3초**) 없으면 detach
+- **패드 연결**: attach + **90°**
+- **D-Pad ←/→**: 0.1° 단위 연속 슬루
+- **3초 무입력**(슬루 완료 후): detach
+
+### 터렛 상하 (pitch, GPIO23)
+
+- **패드 연결**: attach + **90°**
+- **D-Pad ↑**: +10° (최대 180°)
+- **D-Pad ↓**: −10° (최소 0°)
+- **슬루**: 목표까지 부드럽게 이동
+- **3초 무입력**(슬루 완료 후): detach
+- **Start**: 좌우·상하 모두 90°
 
 ### 포 발사 시퀀스 (B)
 
