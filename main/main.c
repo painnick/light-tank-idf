@@ -118,7 +118,7 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 10,
 // 터렛: 0.1° 단위(x10)로 매 루프 목표·출력을 같이 움직여 "멈춤-재개" 끊김 제거
 // 10ms마다 1 = 0.1° → 약 10°/s (이전 100ms/1°와 동일 속도, 연속 보간)
 #define TURRET_DEG_SCALE              10  // 내부 단위 = 도 * 10
-#define TURRET_HOLD_X10_PER_LOOP       1  // D-Pad 유지 시 10ms당 목표 변화 (0.1°)
+#define TURRET_HOLD_X10_PER_LOOP       2  // D-Pad 유지 시 10ms당 목표 변화 (0.1°)
 #define TURRET_SLEW_X10_PER_LOOP       2  // 출력은 목표보다 약간 빠르게 따라감 (따라잡기)
 #define TURRET_IDLE_DISCONNECT_MS   3000  // 무입력 + 슬루 완료 후 서보 detach (ms)
 #define TURRET_CENTER_DEG             90
