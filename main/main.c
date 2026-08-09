@@ -116,7 +116,7 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 10,
 #define MACHINE_GUN_DURATION    500   // panzer4 MG_FIRE_MS
 #define MG_LED_BLINK_MS         75    // panzer4 게틀링 LED 깜빡임 주기
 // 터렛: 목표 각도(입력)와 출력 각도(슬루) 분리 → 부드럽게 따라감
-#define TURRET_TARGET_STEP_INTERVAL_MS 50  // D-Pad 유지 시 목표 ±1° 간격 (ms)
+#define TURRET_TARGET_STEP_INTERVAL_MS 100 // D-Pad 유지 시 목표 ±1° 간격 (ms) — 2× 느리게(구 50ms)
 #define TURRET_SLEW_DEG_PER_LOOP       1   // 제어 루프(10ms)마다 출력 각도 최대 변화량
 #define TURRET_IDLE_DISCONNECT_MS   3000   // 무입력 + 슬루 완료 후 서보 detach (ms)
 #define TURRET_CENTER_DEG             90

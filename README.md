@@ -131,7 +131,7 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 |------|------|
 | 좌 스틱 Y | 좌측 트랙 전/후진 (즉시 최대 아님, ~1초 램프 가속) |
 | 우 스틱 Y | 우측 트랙 전/후진 (동일) |
-| D-Pad ← / → | 터렛 좌/우 회전 (0°~180°, 목표 약 50ms마다 ±1°, PWM은 10ms 슬루) |
+| D-Pad ← / → | 터렛 좌/우 회전 (0°~180°, 목표 약 100ms마다 ±1°, PWM은 10ms 슬루) |
 | Start | 터렛 서보 중앙(90°) |
 | A | 게틀링(기관총) — LED 75ms 깜빡임, 약 0.5초 |
 | B | 포신 — LED·효과음 후 리코일(후진) |
@@ -143,7 +143,7 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 - **부팅**: 서보 미연결 (PWM 없음)
 - **게임패드 연결 시**: 서보 attach 후 **중앙(90°)** (즉시)
 - **게임패드 해제 시**: 서보 detach
-- **부드럽게 회전**: D-Pad는 **목표 각도**만 바꾸고 (`TURRET_TARGET_STEP_INTERVAL_MS`≈50ms마다 ±1°),  
+- **부드럽게 회전**: D-Pad는 **목표 각도**만 바꾸고 (`TURRET_TARGET_STEP_INTERVAL_MS`≈**100ms**마다 ±1°, 약 10°/s),  
   PWM 출력(`current`)은 매 제어 루프(10ms) `TURRET_SLEW_DEG_PER_LOOP`(1°)씩 따라감
 - **Start / 연결**: 목표·출력을 90°로 즉시 맞춤
 - **무입력 해제**: 슬루 완료 후 `TURRET_IDLE_DISCONNECT_MS`(기본 **3초**) 없으면 detach
