@@ -128,11 +128,15 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 #define TURRET_CENTER_X10    (TURRET_CENTER_DEG * TURRET_DEG_SCALE)
 #define TURRET_MAX_X10       (180 * TURRET_DEG_SCALE)
 
-// 포탑 상하(pitch) — GPIO23, 연결 시 90°, D-Pad 상하 10° 스텝, 3초 무입력 detach
+// 포탑 상하(pitch) — GPIO23, 연결 시 90°, 범위 30°~135°, D-Pad 10° 스텝, 3초 무입력 detach
 #define PITCH_STEP_DEG                10
 #define PITCH_IDLE_DISCONNECT_MS    3000
 #define PITCH_CENTER_DEG              90
+#define PITCH_MIN_DEG                 30  // 아래 한계
+#define PITCH_MAX_DEG                135  // 위 한계
 #define PITCH_SLEW_X10_PER_LOOP        5  // 10ms당 0.5° — 10° 스텝을 부드럽게
+#define PITCH_MIN_X10   (PITCH_MIN_DEG * TURRET_DEG_SCALE)
+#define PITCH_MAX_X10   (PITCH_MAX_DEG * TURRET_DEG_SCALE)
 #define GAMEPAD_CONNECT_GRACE_MS  500 // 연결 직후 입력 무시 (노이즈/잔여 D-Pad 방지)
 #define GAMEPAD_INPUT_TIMEOUT_MS  1000 // 리포트 무수신 시 트랙 정지 failsafe (연결은 유지 가정)
 #define RECOIL_DELAY_MS         250   // LED·효과음 후 반동 시작 지연 (ms)
@@ -550,8 +554,15 @@ static void process_turret_idle(void) {
 // ============================================================================
 // 포탑 상하(pitch) — GPIO23, 10° 스텝, 3초 무입력 detach
 // ============================================================================
+static int clamp_pitch_x10(int x10) {
+    if (x10 < PITCH_MIN_X10) return PITCH_MIN_X10;
+    if (x10 > PITCH_MAX_X10) return PITCH_MAX_X10;
+    return x10;
+}
+
 static void pitch_apply_pwm_x10(int angle_x10) {
-    angle_x10 = clamp_turret_x10(angle_x10);
+    angle_x10 = clamp_pitch_x10(angle_x10);
+    // duty 맵은 0~180° 전체 스케일 유지 (실제 명령만 30~135로 제한)
     uint32_t duty = 409 + (uint32_t)((int32_t)angle_x10 * (2048 - 409) / TURRET_MAX_X10);
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CH_PITCH, duty);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CH_PITCH);
@@ -586,7 +597,7 @@ static void pitch_detach(void) {
 }
 
 static void set_pitch_target_deg(int angle_deg, bool immediate) {
-    int x10 = clamp_turret_x10(angle_deg * TURRET_DEG_SCALE);
+    int x10 = clamp_pitch_x10(angle_deg * TURRET_DEG_SCALE);
     g_pitch_target_x10 = x10;
     if (immediate) {
         g_pitch_current_x10 = x10;
@@ -598,15 +609,16 @@ static void set_pitch_target_deg(int angle_deg, bool immediate) {
     }
 }
 
-// D-Pad 상하 엣지: 목표 ±10°
+// D-Pad 상하 엣지: 목표 ±10° (30°~135°)
 static void pitch_nudge(int delta_deg) {
     int cur_deg = g_pitch_target_x10 / TURRET_DEG_SCALE;
     int next = cur_deg + delta_deg;
-    if (next < 0) next = 0;
-    if (next > 180) next = 180;
+    if (next < PITCH_MIN_DEG) next = PITCH_MIN_DEG;
+    if (next > PITCH_MAX_DEG) next = PITCH_MAX_DEG;
     g_pitch_last_input_ms = now_ms();
     set_pitch_target_deg(next, false);
-    ESP_LOGI(TAG, "포탑 pitch 목표 %d° (Δ%d)", next, delta_deg);
+    ESP_LOGI(TAG, "포탑 pitch 목표 %d° (Δ%d, 범위 %d~%d)",
+             next, delta_deg, PITCH_MIN_DEG, PITCH_MAX_DEG);
 }
 
 static void process_pitch_slew(void) {
