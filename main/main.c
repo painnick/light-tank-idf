@@ -130,7 +130,7 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 
 // 포탑 상하(pitch) — GPIO23, 연결 시 80°, 범위 60°~110°, 홀드 시 1°씩 연속, 3초 무입력 detach
 #define PITCH_STEP_DEG                 1   // 홀드 중 목표 1° 단위
-#define PITCH_HOLD_INTERVAL_MS        50   // 홀드 시 1° 간격 (ms)
+#define PITCH_HOLD_INTERVAL_MS       100   // 홀드 시 1° 간격 (ms) — 2× 느리게(구 50ms)
 #define PITCH_IDLE_DISCONNECT_MS    3000
 #define PITCH_CENTER_DEG              80  // 패드 연결 / Start 시
 #define PITCH_MIN_DEG                 60  // 아래 한계
