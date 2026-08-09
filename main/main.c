@@ -128,13 +128,13 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 #define TURRET_CENTER_X10    (TURRET_CENTER_DEG * TURRET_DEG_SCALE)
 #define TURRET_MAX_X10       (180 * TURRET_DEG_SCALE)
 
-// 포탑 상하(pitch) — GPIO23, 연결 시 90°, 범위 30°~135°, D-Pad 10° 스텝, 3초 무입력 detach
-#define PITCH_STEP_DEG                10
+// 포탑 상하(pitch) — GPIO23, 연결 시 80°, 범위 60°~90°, D-Pad 5° 스텝, 3초 무입력 detach
+#define PITCH_STEP_DEG                 5
 #define PITCH_IDLE_DISCONNECT_MS    3000
-#define PITCH_CENTER_DEG              90
-#define PITCH_MIN_DEG                 30  // 아래 한계
-#define PITCH_MAX_DEG                135  // 위 한계
-#define PITCH_SLEW_X10_PER_LOOP        5  // 10ms당 0.5° — 10° 스텝을 부드럽게
+#define PITCH_CENTER_DEG              80  // 패드 연결 / Start 시
+#define PITCH_MIN_DEG                 60  // 아래 한계
+#define PITCH_MAX_DEG                 90  // 위 한계
+#define PITCH_SLEW_X10_PER_LOOP        5  // 10ms당 0.5° — 스텝을 부드럽게
 #define PITCH_MIN_X10   (PITCH_MIN_DEG * TURRET_DEG_SCALE)
 #define PITCH_MAX_X10   (PITCH_MAX_DEG * TURRET_DEG_SCALE)
 #define GAMEPAD_CONNECT_GRACE_MS  500 // 연결 직후 입력 무시 (노이즈/잔여 D-Pad 방지)
