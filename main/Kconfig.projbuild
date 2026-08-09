@@ -72,7 +72,7 @@ menu "RC Tank Hardware Pins"
         default 23
         help
             Turret elevation (pitch) SG90 PWM. Default: GPIO23.
-            Center 90 on connect; D-Pad up/down steps of 10 deg; idle detach 3s.
+            Center 80 on connect; range 60-90; D-Pad up/down steps of 5 deg; idle detach 3s.
 
     config PIN_DFPLAYER_TX
         int "DFPlayer UART TX (ESP -> DFPlayer RX)"
