@@ -115,11 +115,15 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 10,
 #define CANNON_LED_DURATION     200
 #define MACHINE_GUN_DURATION    500   // panzer4 MG_FIRE_MS
 #define MG_LED_BLINK_MS         75    // panzer4 게틀링 LED 깜빡임 주기
-// 터렛: 목표 각도(입력)와 출력 각도(슬루) 분리 → 부드럽게 따라감
-#define TURRET_TARGET_STEP_INTERVAL_MS 100 // D-Pad 유지 시 목표 ±1° 간격 (ms) — 2× 느리게(구 50ms)
-#define TURRET_SLEW_DEG_PER_LOOP       1   // 제어 루프(10ms)마다 출력 각도 최대 변화량
-#define TURRET_IDLE_DISCONNECT_MS   3000   // 무입력 + 슬루 완료 후 서보 detach (ms)
+// 터렛: 0.1° 단위(x10)로 매 루프 목표·출력을 같이 움직여 "멈춤-재개" 끊김 제거
+// 10ms마다 1 = 0.1° → 약 10°/s (이전 100ms/1°와 동일 속도, 연속 보간)
+#define TURRET_DEG_SCALE              10  // 내부 단위 = 도 * 10
+#define TURRET_HOLD_X10_PER_LOOP       1  // D-Pad 유지 시 10ms당 목표 변화 (0.1°)
+#define TURRET_SLEW_X10_PER_LOOP       2  // 출력은 목표보다 약간 빠르게 따라감 (따라잡기)
+#define TURRET_IDLE_DISCONNECT_MS   3000  // 무입력 + 슬루 완료 후 서보 detach (ms)
 #define TURRET_CENTER_DEG             90
+#define TURRET_CENTER_X10    (TURRET_CENTER_DEG * TURRET_DEG_SCALE)
+#define TURRET_MAX_X10       (180 * TURRET_DEG_SCALE)
 #define GAMEPAD_CONNECT_GRACE_MS  500 // 연결 직후 입력 무시 (노이즈/잔여 D-Pad 방지)
 #define GAMEPAD_INPUT_TIMEOUT_MS  1000 // 리포트 무수신 시 트랙 정지 failsafe (연결은 유지 가정)
 #define RECOIL_DELAY_MS         250   // LED·효과음 후 반동 시작 지연 (ms)
@@ -167,12 +171,13 @@ static int g_target_right_speed = 0;
 static int g_current_left_x10 = 0;
 static int g_current_right_x10 = 0;
 
-// 터렛 서보 (target=입력 목표, current=PWM에 쓰는 보간 각도)
-static int g_turret_target = TURRET_CENTER_DEG;
-static int g_turret_current = TURRET_CENTER_DEG;
-static int64_t g_turret_last_target_step_ms = 0;
+// 터렛 서보 (x10 = 0.1°). hold 플래그는 process_turret_slew 에서 목표 연속 갱신
+static int g_turret_target_x10 = TURRET_CENTER_X10;
+static int g_turret_current_x10 = TURRET_CENTER_X10;
 static int64_t g_turret_last_input_ms = 0;
 static bool g_turret_attached = false;
+static bool g_turret_hold_left = false;
+static bool g_turret_hold_right = false;
 
 // 게임패드 연결 직후 입력 무시 시각
 static int64_t g_input_ignore_until_ms = 0;
@@ -423,19 +428,19 @@ static void process_motor_ramp(void) {
 }
 
 // ============================================================================
-// 서보 제어 — 목표 각도 슬루 보간 (끊김 완화)
+// 서보 제어 — 0.1° 단위 연속 슬루 (D-Pad 유지 시 매 루프 목표 전진)
 // ============================================================================
-static int clamp_turret_deg(int angle) {
-    if (angle < 0) return 0;
-    if (angle > 180) return 180;
-    return angle;
+static int clamp_turret_x10(int x10) {
+    if (x10 < 0) return 0;
+    if (x10 > TURRET_MAX_X10) return TURRET_MAX_X10;
+    return x10;
 }
 
-static void turret_apply_pwm(int angle) {
-    angle = clamp_turret_deg(angle);
-    // 0.5ms(0도) ~ 2.5ms(180도) in 14-bit (0~16383) at 50Hz(20ms)
-    // 0.5ms = 409, 2.5ms = 2048
-    uint32_t duty = 409 + (uint32_t)((int32_t)angle * (2048 - 409) / 180);
+// angle_x10: 0.1° 단위 → 14-bit duty (0.5ms~2.5ms)
+static void turret_apply_pwm_x10(int angle_x10) {
+    angle_x10 = clamp_turret_x10(angle_x10);
+    // duty = 409 + angle_x10 * (2048-409) / (180*10)
+    uint32_t duty = 409 + (uint32_t)((int32_t)angle_x10 * (2048 - 409) / TURRET_MAX_X10);
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CH_SERVO, duty);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CH_SERVO);
 }
@@ -453,7 +458,7 @@ static void turret_attach(void) {
     };
     ledc_channel_config(&servo_ch);
     g_turret_attached = true;
-    turret_apply_pwm(g_turret_current);
+    turret_apply_pwm_x10(g_turret_current_x10);
     ESP_LOGD(TAG, "터렛 서보 연결");
 }
 
@@ -463,44 +468,63 @@ static void turret_detach(void) {
     ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CH_SERVO, 0);
     gpio_reset_pin(PIN_TURRET_SERVO);
     g_turret_attached = false;
+    g_turret_hold_left = false;
+    g_turret_hold_right = false;
     ESP_LOGD(TAG, "터렛 서보 연결 해제");
 }
 
-// 목표 각도 설정. immediate=true 이면 슬루 없이 현재=목표로 맞춤 (연결/Start)
-static void set_turret_target(int angle, bool immediate) {
-    angle = clamp_turret_deg(angle);
-    g_turret_target = angle;
+// 목표 각도(도). immediate=true 이면 슬루 없이 현재=목표
+static void set_turret_target_deg(int angle_deg, bool immediate) {
+    int x10 = clamp_turret_x10(angle_deg * TURRET_DEG_SCALE);
+    g_turret_target_x10 = x10;
     if (immediate) {
-        g_turret_current = angle;
+        g_turret_current_x10 = x10;
     }
     if (!g_turret_attached) {
         turret_attach();
     } else if (immediate) {
-        turret_apply_pwm(g_turret_current);
+        turret_apply_pwm_x10(g_turret_current_x10);
     }
 }
 
-// 매 제어 루프: current 를 target 쪽으로 최대 TURRET_SLEW_DEG_PER_LOOP 이동
+// 매 10ms: D-Pad 홀드 시 목표 연속 증가 + current 슬루 + PWM
 static void process_turret_slew(void) {
-    if (!g_turret_attached) return;
-    if (g_turret_current == g_turret_target) return;
-
-    int diff = g_turret_target - g_turret_current;
-    int step = TURRET_SLEW_DEG_PER_LOOP;
-    if (diff > step) {
-        g_turret_current += step;
-    } else if (diff < -step) {
-        g_turret_current -= step;
-    } else {
-        g_turret_current = g_turret_target;
+    // 홀드 중이면 목표를 매 루프 조금씩 이동 (100ms 점프 제거)
+    if (g_turret_hold_left && !g_turret_hold_right) {
+        int next = g_turret_target_x10 - TURRET_HOLD_X10_PER_LOOP;
+        g_turret_target_x10 = clamp_turret_x10(next);
+        g_turret_last_input_ms = now_ms();
+        if (!g_turret_attached) {
+            turret_attach();
+        }
+    } else if (g_turret_hold_right && !g_turret_hold_left) {
+        int next = g_turret_target_x10 + TURRET_HOLD_X10_PER_LOOP;
+        g_turret_target_x10 = clamp_turret_x10(next);
+        g_turret_last_input_ms = now_ms();
+        if (!g_turret_attached) {
+            turret_attach();
+        }
     }
-    turret_apply_pwm(g_turret_current);
+
+    if (!g_turret_attached) return;
+    if (g_turret_current_x10 == g_turret_target_x10) return;
+
+    int diff = g_turret_target_x10 - g_turret_current_x10;
+    int step = TURRET_SLEW_X10_PER_LOOP;
+    if (diff > step) {
+        g_turret_current_x10 += step;
+    } else if (diff < -step) {
+        g_turret_current_x10 -= step;
+    } else {
+        g_turret_current_x10 = g_turret_target_x10;
+    }
+    turret_apply_pwm_x10(g_turret_current_x10);
 }
 
 static void process_turret_idle(void) {
     if (!g_turret_attached) return;
-    // 슬루 중이면 아직 움직이는 중 — detach 보류
-    if (g_turret_current != g_turret_target) return;
+    if (g_turret_hold_left || g_turret_hold_right) return;
+    if (g_turret_current_x10 != g_turret_target_x10) return;
     if (now_ms() - g_turret_last_input_ms >= TURRET_IDLE_DISCONNECT_MS) {
         turret_detach();
     }
@@ -528,26 +552,11 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
         set_track_targets(left_y, right_y);
     }
 
-    // D-PAD 좌우: 목표 각도만 갱신 — PWM은 process_turret_slew()가 부드럽게 따라감
-    if ((dpad & DPAD_LEFT) || (dpad & DPAD_RIGHT)) {
-        int64_t now = now_ms();
-        if (g_turret_attached) {
-            g_turret_last_input_ms = now;
-        }
-        if (now - g_turret_last_target_step_ms >= TURRET_TARGET_STEP_INTERVAL_MS) {
-            int next = g_turret_target;
-            if (dpad & DPAD_LEFT) {
-                next = g_turret_target - 1;
-            } else if (dpad & DPAD_RIGHT) {
-                next = g_turret_target + 1;
-            }
-            next = clamp_turret_deg(next);
-            if (next != g_turret_target) {
-                g_turret_last_target_step_ms = now;
-                g_turret_last_input_ms = now;
-                set_turret_target(next, false);
-            }
-        }
+    // D-PAD 좌우: 홀드 플래그만 설정 — 매 루프 process_turret_slew 가 0.1°씩 연속 이동
+    g_turret_hold_left = (dpad & DPAD_LEFT) != 0;
+    g_turret_hold_right = (dpad & DPAD_RIGHT) != 0;
+    if (g_turret_hold_left || g_turret_hold_right) {
+        g_turret_last_input_ms = now_ms();
     }
 
     // Start: 터렛 서보 중앙 (즉시)
@@ -555,7 +564,9 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
         if (!g_start_pressed) {
             g_start_pressed = true;
             g_turret_last_input_ms = now_ms();
-            set_turret_target(TURRET_CENTER_DEG, true);
+            g_turret_hold_left = false;
+            g_turret_hold_right = false;
+            set_turret_target_deg(TURRET_CENTER_DEG, true);
         }
     } else {
         g_start_pressed = false;
@@ -738,10 +749,11 @@ static void control_task(void* arg) {
         if (gamepad_read_new_connection()) {
             int64_t now = now_ms();
             g_input_ignore_until_ms = now + GAMEPAD_CONNECT_GRACE_MS;
-            g_turret_last_target_step_ms = now; // 유예 직후 즉시 목표 스텝 방지
             g_turret_last_input_ms = now;
+            g_turret_hold_left = false;
+            g_turret_hold_right = false;
             set_track_targets(0, 0);
-            set_turret_target(TURRET_CENTER_DEG, true); // 패드 연결 시 attach + 중앙
+            set_turret_target_deg(TURRET_CENTER_DEG, true); // 패드 연결 시 attach + 중앙
 
             dfplayer_stop();
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -761,6 +773,8 @@ static void control_task(void* arg) {
             set_track_immediate(0, 0);
             motor_driver_set_enabled(false); // nSLEEP LOW — 부팅 외 안전 컷오프
             turret_detach();
+            g_turret_hold_left = false;
+            g_turret_hold_right = false;
             g_machinegun_firing = false;
             g_mg_led_on = false;
             g_y_pressed = false;

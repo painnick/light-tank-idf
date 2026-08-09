@@ -10,7 +10,7 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 | 기능 | 설명 |
 |------|------|
 | 트랙 구동 | DRV8833, 좌/우 스틱 Y축 — panzer4식 가속/감속 램프(~1초 최대) |
-| 터렛 | SG90 서보 — D-Pad 목표 각도 + 10ms 슬루 보간(부드러움), 3초 무입력 시 detach |
+| 터렛 | SG90 서보 — 0.1° 단위 연속 슬루(~10°/s), 3초 무입력 시 detach |
 | 포신 | B 버튼 — LED·효과음 후 트랙 후진 리코일 |
 | 게틀링(기관총) | A 버튼 — 게틀링 LED 깜빡임 + 효과음 |
 | 볼륨 | L1 / R1 (홀드 시 100ms마다 1단계, 즉시 반영), 릴리스 시 NVS 저장 |
@@ -131,7 +131,7 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 |------|------|
 | 좌 스틱 Y | 좌측 트랙 전/후진 (즉시 최대 아님, ~1초 램프 가속) |
 | 우 스틱 Y | 우측 트랙 전/후진 (동일) |
-| D-Pad ← / → | 터렛 좌/우 회전 (0°~180°, 목표 약 100ms마다 ±1°, PWM은 10ms 슬루) |
+| D-Pad ← / → | 터렛 좌/우 회전 (0°~180°, 누르는 동안 ~10°/s 연속, 0.1° 보간) |
 | Start | 터렛 서보 중앙(90°) |
 | A | 게틀링(기관총) — LED 75ms 깜빡임, 약 0.5초 |
 | B | 포신 — LED·효과음 후 리코일(후진) |
@@ -143,11 +143,10 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 - **부팅**: 서보 미연결 (PWM 없음)
 - **게임패드 연결 시**: 서보 attach 후 **중앙(90°)** (즉시)
 - **게임패드 해제 시**: 서보 detach
-- **부드럽게 회전**: D-Pad는 **목표 각도**만 바꾸고 (`TURRET_TARGET_STEP_INTERVAL_MS`≈**100ms**마다 ±1°, 약 10°/s),  
-  PWM 출력(`current`)은 매 제어 루프(10ms) `TURRET_SLEW_DEG_PER_LOOP`(1°)씩 따라감
+- **부드럽게 회전**: 내부 **0.1°(x10)** 단위. D-Pad 유지 시 매 10ms 목표 ±0.1° (`TURRET_HOLD_X10_PER_LOOP`),  
+  PWM `current`는 매 10ms 최대 0.2° 따라감 (`TURRET_SLEW_X10_PER_LOOP`) → 이전처럼 100ms마다 1° 점프 후 대기하지 않음
 - **Start / 연결**: 목표·출력을 90°로 즉시 맞춤
-- **무입력 해제**: 슬루 완료 후 `TURRET_IDLE_DISCONNECT_MS`(기본 **3초**) 없으면 detach
-- **재연결**: D-Pad로 목표를 바꿀 때 다시 attach
+- **무입력 해제**: 홀드 종료·슬루 완료 후 `TURRET_IDLE_DISCONNECT_MS`(기본 **3초**) 없으면 detach
 
 ### 포 발사 시퀀스 (B)
 
