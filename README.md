@@ -152,7 +152,7 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 - **패드 연결**: attach + **80°** (`PITCH_CENTER_DEG`)
 - **범위**: **60°~110°** (`PITCH_MIN_DEG` ~ `PITCH_MAX_DEG`)
-- **D-Pad ↑/↓ 홀드**: 약 **100ms**마다 **1°** 씩 연속 이동 (~10°/s, `PITCH_HOLD_INTERVAL_MS`)
+- **D-Pad ↑/↓ 홀드**: 약 **50ms**마다 **1°** 씩 연속 이동 (~20°/s, `PITCH_HOLD_INTERVAL_MS`)
 - **범위**: 60°~110°
 - **슬루**: 목표까지 부드럽게 이동
 - **3초 무입력**(슬루 완료 후): detach
