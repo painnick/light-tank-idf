@@ -128,13 +128,14 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 #define TURRET_CENTER_X10    (TURRET_CENTER_DEG * TURRET_DEG_SCALE)
 #define TURRET_MAX_X10       (180 * TURRET_DEG_SCALE)
 
-// 포탑 상하(pitch) — GPIO23, 연결 시 80°, 범위 60°~110°, D-Pad 5° 스텝, 3초 무입력 detach
-#define PITCH_STEP_DEG                 5
+// 포탑 상하(pitch) — GPIO23, 연결 시 80°, 범위 60°~110°, 홀드 시 1°씩 연속, 3초 무입력 detach
+#define PITCH_STEP_DEG                 1   // 홀드 중 목표 1° 단위
+#define PITCH_HOLD_INTERVAL_MS        50   // 홀드 시 1° 간격 (ms)
 #define PITCH_IDLE_DISCONNECT_MS    3000
 #define PITCH_CENTER_DEG              80  // 패드 연결 / Start 시
 #define PITCH_MIN_DEG                 60  // 아래 한계
 #define PITCH_MAX_DEG                110  // 위 한계
-#define PITCH_SLEW_X10_PER_LOOP        5  // 10ms당 0.5° — 스텝을 부드럽게
+#define PITCH_SLEW_X10_PER_LOOP       10  // 10ms당 1° — 1° 스텝을 빠르게 따라감
 #define PITCH_MIN_X10   (PITCH_MIN_DEG * TURRET_DEG_SCALE)
 #define PITCH_MAX_X10   (PITCH_MAX_DEG * TURRET_DEG_SCALE)
 #define GAMEPAD_CONNECT_GRACE_MS  500 // 연결 직후 입력 무시 (노이즈/잔여 D-Pad 방지)
@@ -192,13 +193,14 @@ static bool g_turret_attached = false;
 static bool g_turret_hold_left = false;
 static bool g_turret_hold_right = false;
 
-// 포탑 상하(pitch)
+// 포탑 상하(pitch) — D-Pad 홀드 시 1° 연속
 static int g_pitch_target_x10 = PITCH_CENTER_DEG * TURRET_DEG_SCALE;
 static int g_pitch_current_x10 = PITCH_CENTER_DEG * TURRET_DEG_SCALE;
 static int64_t g_pitch_last_input_ms = 0;
+static int64_t g_pitch_last_step_ms = 0;
 static bool g_pitch_attached = false;
-static bool g_dpad_up_pressed = false;
-static bool g_dpad_down_pressed = false;
+static bool g_pitch_hold_up = false;
+static bool g_pitch_hold_down = false;
 
 // 게임패드 연결 직후 입력 무시 시각
 static int64_t g_input_ignore_until_ms = 0;
@@ -591,8 +593,8 @@ static void pitch_detach(void) {
     ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CH_PITCH, 0);
     gpio_reset_pin(PIN_TURRET_PITCH);
     g_pitch_attached = false;
-    g_dpad_up_pressed = false;
-    g_dpad_down_pressed = false;
+    g_pitch_hold_up = false;
+    g_pitch_hold_down = false;
     ESP_LOGI(TAG, "포탑 pitch 서보 detach");
 }
 
@@ -609,19 +611,35 @@ static void set_pitch_target_deg(int angle_deg, bool immediate) {
     }
 }
 
-// D-Pad 상하 엣지: 목표 ±10° (30°~135°)
+// 목표 ±step° (60~110)
 static void pitch_nudge(int delta_deg) {
     int cur_deg = g_pitch_target_x10 / TURRET_DEG_SCALE;
     int next = cur_deg + delta_deg;
     if (next < PITCH_MIN_DEG) next = PITCH_MIN_DEG;
     if (next > PITCH_MAX_DEG) next = PITCH_MAX_DEG;
+    if (next * TURRET_DEG_SCALE == g_pitch_target_x10) return;
     g_pitch_last_input_ms = now_ms();
     set_pitch_target_deg(next, false);
-    ESP_LOGI(TAG, "포탑 pitch 목표 %d° (Δ%d, 범위 %d~%d)",
-             next, delta_deg, PITCH_MIN_DEG, PITCH_MAX_DEG);
 }
 
 static void process_pitch_slew(void) {
+    // 홀드 중: 일정 간격으로 1°씩 목표 갱신 (계속 움직임)
+    if (g_pitch_hold_up || g_pitch_hold_down) {
+        int64_t now = now_ms();
+        g_pitch_last_input_ms = now;
+        if (!g_pitch_attached) {
+            pitch_attach();
+        }
+        if (now - g_pitch_last_step_ms >= PITCH_HOLD_INTERVAL_MS) {
+            g_pitch_last_step_ms = now;
+            if (g_pitch_hold_up && !g_pitch_hold_down) {
+                pitch_nudge(+PITCH_STEP_DEG);
+            } else if (g_pitch_hold_down && !g_pitch_hold_up) {
+                pitch_nudge(-PITCH_STEP_DEG);
+            }
+        }
+    }
+
     if (!g_pitch_attached) return;
     if (g_pitch_current_x10 == g_pitch_target_x10) return;
 
@@ -639,6 +657,7 @@ static void process_pitch_slew(void) {
 
 static void process_pitch_idle(void) {
     if (!g_pitch_attached) return;
+    if (g_pitch_hold_up || g_pitch_hold_down) return;
     if (g_pitch_current_x10 != g_pitch_target_x10) return;
     if (now_ms() - g_pitch_last_input_ms >= PITCH_IDLE_DISCONNECT_MS) {
         pitch_detach();
@@ -674,22 +693,11 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
         g_turret_last_input_ms = now_ms();
     }
 
-    // D-PAD 상하: pitch — 누를 때마다 ±10° (엣지), 3초 무입력 detach
-    if (dpad & DPAD_UP) {
-        if (!g_dpad_up_pressed) {
-            g_dpad_up_pressed = true;
-            pitch_nudge(+PITCH_STEP_DEG);
-        }
-    } else {
-        g_dpad_up_pressed = false;
-    }
-    if (dpad & DPAD_DOWN) {
-        if (!g_dpad_down_pressed) {
-            g_dpad_down_pressed = true;
-            pitch_nudge(-PITCH_STEP_DEG);
-        }
-    } else {
-        g_dpad_down_pressed = false;
+    // D-PAD 상하: pitch 홀드 — 누르는 동안 1°씩 연속 (process_pitch_slew)
+    g_pitch_hold_up = (dpad & DPAD_UP) != 0;
+    g_pitch_hold_down = (dpad & DPAD_DOWN) != 0;
+    if (g_pitch_hold_up || g_pitch_hold_down) {
+        g_pitch_last_input_ms = now_ms();
     }
 
     // Start: 좌우·상하 서보 중앙 (즉시)
@@ -700,6 +708,8 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
             g_pitch_last_input_ms = now_ms();
             g_turret_hold_left = false;
             g_turret_hold_right = false;
+            g_pitch_hold_up = false;
+            g_pitch_hold_down = false;
             set_turret_target_deg(TURRET_CENTER_DEG, true);
             set_pitch_target_deg(PITCH_CENTER_DEG, true);
         }
@@ -888,11 +898,11 @@ static void control_task(void* arg) {
             g_pitch_last_input_ms = now;
             g_turret_hold_left = false;
             g_turret_hold_right = false;
-            g_dpad_up_pressed = false;
-            g_dpad_down_pressed = false;
+            g_pitch_hold_up = false;
+            g_pitch_hold_down = false;
             set_track_targets(0, 0);
             set_turret_target_deg(TURRET_CENTER_DEG, true);  // yaw 90°
-            set_pitch_target_deg(PITCH_CENTER_DEG, true);    // pitch 90°
+            set_pitch_target_deg(PITCH_CENTER_DEG, true);    // pitch 80°
 
             dfplayer_stop();
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -915,8 +925,8 @@ static void control_task(void* arg) {
             pitch_detach();
             g_turret_hold_left = false;
             g_turret_hold_right = false;
-            g_dpad_up_pressed = false;
-            g_dpad_down_pressed = false;
+            g_pitch_hold_up = false;
+            g_pitch_hold_down = false;
             g_machinegun_firing = false;
             g_mg_led_on = false;
             g_y_pressed = false;
@@ -940,8 +950,8 @@ static void control_task(void* arg) {
                 // 마지막 D-Pad 홀드가 남는 것 방지
                 g_turret_hold_left = false;
                 g_turret_hold_right = false;
-                g_dpad_up_pressed = false;
-                g_dpad_down_pressed = false;
+                g_pitch_hold_up = false;
+                g_pitch_hold_down = false;
                 if (!prev_input_stale) {
                     ESP_LOGW(TAG, "게임패드 입력 타임아웃 — 트랙 정지");
                 }
