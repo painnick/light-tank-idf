@@ -795,6 +795,9 @@ static void control_task(void* arg) {
                 if (!g_recoil_active) {
                     set_track_targets(0, 0);
                 }
+                // 마지막 D-Pad 홀드가 남는 것 방지
+                g_turret_hold_left = false;
+                g_turret_hold_right = false;
                 if (!prev_input_stale) {
                     ESP_LOGW(TAG, "게임패드 입력 타임아웃 — 트랙 정지");
                 }
