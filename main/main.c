@@ -139,7 +139,8 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 #define PITCH_MIN_X10   (PITCH_MIN_DEG * TURRET_DEG_SCALE)
 #define PITCH_MAX_X10   (PITCH_MAX_DEG * TURRET_DEG_SCALE)
 #define GAMEPAD_CONNECT_GRACE_MS  500 // 연결 직후 입력 무시 (노이즈/잔여 D-Pad 방지)
-#define GAMEPAD_INPUT_TIMEOUT_MS  1000 // 리포트 무수신 시 트랙 정지 failsafe (연결은 유지 가정)
+#define GAMEPAD_STICK_DEADZONE    50
+#define GAMEPAD_INPUT_TIMEOUT_MS  1000 // 스틱이 살아 있는데 리포트가 끊기면 트랙 정지 (BLE는 무입력 때 리포트를 안 보냄)
 #define RECOIL_DELAY_MS         250   // LED·효과음 후 반동 시작 지연 (ms)
 #define RECOIL_BACK_DURATION    40    // 포 발사 시 후진 시간 (ms)
 #define RECOIL_SETTLE_DURATION  40    // 후진 후 정지 안정화 (ms)
@@ -678,8 +679,8 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
     }
 
     // 데드존
-    int left_y = (abs(axis_y) < 50) ? 0 : (int)axis_y;
-    int right_y = (abs(axis_ry) < 50) ? 0 : (int)axis_ry;
+    int left_y = (abs(axis_y) < GAMEPAD_STICK_DEADZONE) ? 0 : (int)axis_y;
+    int right_y = (abs(axis_ry) < GAMEPAD_STICK_DEADZONE) ? 0 : (int)axis_ry;
 
     // 목표 속도만 설정 — 실제 PWM은 process_motor_ramp()가 가속/감속
     if (!g_recoil_active) {
@@ -938,16 +939,19 @@ static void control_task(void* arg) {
         }
         prev_connected = cur_connected;
 
-        // 게임패드 데이터 처리
+        // BLE HID는 상태 변화가 있을 때만 리포트를 보낸다. 무입력(스틱 0)을
+        // 타임아웃으로 보면 버튼/D-Pad가 1초마다 끊긴다. 스틱이 살아 있는데
+        // 리포트가 멈춘 경우만 트랙을 강제 정지한다.
         if (cur_connected) {
-            // 연결은 유효한데 리포트가 끊긴 상태(BT 스택 행 등) — 마지막
-            // 스틱 값으로 모터가 계속 돌지 않도록 트랙만 정지시킨다.
-            bool input_stale = (now_ms() - gamepad_last_report_ms()) > GAMEPAD_INPUT_TIMEOUT_MS;
+            bool got_pad = gamepad_read(&axis_y, &axis_ry, &buttons, &dpad, &misc_buttons);
+            bool report_old = (now_ms() - gamepad_last_report_ms()) > GAMEPAD_INPUT_TIMEOUT_MS;
+            bool stick_live = got_pad && (abs(axis_y) >= GAMEPAD_STICK_DEADZONE ||
+                                          abs(axis_ry) >= GAMEPAD_STICK_DEADZONE);
+            bool input_stale = report_old && stick_live;
             if (input_stale) {
                 if (!g_recoil_active) {
                     set_track_targets(0, 0);
                 }
-                // 마지막 D-Pad 홀드가 남는 것 방지
                 g_turret_hold_left = false;
                 g_turret_hold_right = false;
                 g_pitch_hold_up = false;
@@ -955,7 +959,7 @@ static void control_task(void* arg) {
                 if (!prev_input_stale) {
                     ESP_LOGW(TAG, "게임패드 입력 타임아웃 — 트랙 정지");
                 }
-            } else if (gamepad_read(&axis_y, &axis_ry, &buttons, &dpad, &misc_buttons)) {
+            } else if (got_pad) {
                 process_gamepad(axis_y, axis_ry, buttons, dpad, misc_buttons);
             }
             prev_input_stale = input_stale;
