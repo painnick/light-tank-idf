@@ -3,7 +3,7 @@
 ESP32-C6 Super Mini 기반 RC 탱크 펌웨어입니다.  
 BLE 게임패드로 **캐터필러 주행**, **터렛 회전**, **포/기관총 효과**, **DFPlayer 효과음**을 제어합니다.
 
-Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포팅한 뒤 **ESP32-C6 Super Mini** 로 이전한 버전이며, 입력은 [Bluepad32](https://github.com/ricardoquesada/bluepad32) + BTstack 를 사용합니다.
+Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포팅한 뒤 **ESP32-C6 Super Mini** 로 이전한 버전이며, 입력은 [Bluepad32](https://github.com/painnick/bluepad32) + BTstack 를 사용합니다.
 
 ## 기능
 
@@ -201,7 +201,8 @@ main/
   dfplayer.c/.h       # DFPlayer Mini UART 제어
   Kconfig.projbuild   # 하드웨어 핀 (menuconfig)
 components/
-  bluepad32/          # Bluepad32 (커스텀 Simple HOG 포함)
+  bluepad32/          # git submodule: https://github.com/painnick/bluepad32
+                      # ESP-IDF 컴포넌트는 src/components/bluepad32
   btstack/            # BTstack ESP32 포트
 ```
 
@@ -235,7 +236,13 @@ REM → RC Tank Hardware Pins
 idf.py build
 ```
 
-Bluepad32·BTstack은 Simple HOG 커스텀이 포함된 채로 `components/` 에 벤더링되어 있습니다. 별도 설정 스크립트 없이 클론 후 바로 빌드하면 됩니다.
+클론 시 Bluepad32 서브모듈을 함께 가져와야 합니다.
+
+```bat
+git clone --recurse-submodules https://github.com/painnick/light-tank-idf.git
+REM 이미 클론한 경우:
+git submodule update --init --recursive
+```
 
 ### 주요 sdkconfig
 

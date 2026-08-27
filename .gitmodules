@@ -1,0 +1,3 @@
+[submodule "components/bluepad32"]
+	path = components/bluepad32
+	url = https://github.com/painnick/bluepad32.git
