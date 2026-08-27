@@ -17,6 +17,8 @@ extern "C" {
 #define DFPLAYER_TRACK_MACHINEGUN 3 /* 0003.mp3 기관총 */
 #define DFPLAYER_TRACK_CONNECTED 4  /* 0004.mp3 게임패드 연결 */
 
+/* UART 연결 전까지 TX를 High로 고정 (부팅 중 DFPlayer RX 글리치 방지) */
+void dfplayer_hold_tx_idle(void);
 esp_err_t dfplayer_init(void);
 esp_err_t dfplayer_play(uint8_t track);
 esp_err_t dfplayer_play_loop(uint8_t track);

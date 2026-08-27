@@ -110,10 +110,11 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 // 타이밍 상수 (ms)
 // ============================================================================
 #define LOOP_INTERVAL_MS        10
-// DFPlayer loop 모드는 자체 반복되므로 재전송하면 트랙이 처음부터 다시 시작된다.
-// 부팅/SD 초기화 중 명령 유실에 대비해 짧은 간격으로 몇 번만 재전송한다.
-#define IDLE_SOUND_RETRY_INTERVAL_MS  3000
-#define IDLE_SOUND_MAX_RETRIES        5
+// DFPlayer Mini는 전원·SD 초기화가 끝나기 전 UART를 붙이면 부팅이 깨질 수 있다.
+// BLE는 바로 시작하고, UART 연결과 첫 재생은 그 이후에만 한다.
+#define DFPLAYER_BOOT_SETTLE_MS       3000
+#define IDLE_SOUND_RETRY_INTERVAL_MS  4000
+#define IDLE_SOUND_MAX_RETRIES        1
 #define VOLUME_CHANGE_INTERVAL  100
 #define CANNON_LED_DURATION     200
 #define MACHINE_GUN_DURATION    500   // panzer4 MG_FIRE_MS
@@ -222,6 +223,12 @@ static bool g_mg_led_on = false;
 static int64_t g_mg_led_last_toggle = 0;
 
 // 효과음
+static bool g_dfplayer_ok = false;
+static bool g_dfplayer_failed = false;
+static int64_t g_dfplayer_ready_at_ms = 0;
+static bool g_dfplayer_volume_sent = false;
+static bool g_idle_sound_started = false;
+static bool g_pending_connect_sound = false;
 static int64_t g_last_idle_sound_time = 0;
 static int g_idle_sound_retries = 0;
 
@@ -856,16 +863,63 @@ static void process_recoil(void) {
     g_recoil_active = false;
 }
 
+static bool dfplayer_boot_ready(void) {
+    return g_dfplayer_ok && now_ms() >= g_dfplayer_ready_at_ms;
+}
+
 static void start_idle_sound(void) {
+    if (!dfplayer_boot_ready())
+        return;
     dfplayer_play_loop(DFPLAYER_TRACK_IDLE);
+    g_idle_sound_started = true;
     g_last_idle_sound_time = now_ms();
     g_idle_sound_retries = 0;
+    ESP_LOGI(TAG, "DFPlayer idle loop (0001)");
+}
+
+// SD 초기화 후에만 UART를 붙이고 볼륨·대기음·연결음을 보낸다. BLE 시작은 막지 않는다.
+static void process_dfplayer_boot(void) {
+    if (g_dfplayer_failed)
+        return;
+    if (now_ms() < g_dfplayer_ready_at_ms)
+        return;
+
+    if (!g_dfplayer_ok) {
+        if (dfplayer_init() != ESP_OK) {
+            ESP_LOGW(TAG, "DFPlayer init failed — continuing without sound");
+            g_dfplayer_failed = true;
+            return;
+        }
+        g_dfplayer_ok = true;
+        ESP_LOGI(TAG, "DFPlayer UART attached");
+        return;
+    }
+
+    if (!g_dfplayer_volume_sent) {
+        dfplayer_set_volume(g_current_volume);
+        g_dfplayer_volume_sent = true;
+        return;
+    }
+
+    if (g_pending_connect_sound) {
+        g_pending_connect_sound = false;
+        dfplayer_play(DFPLAYER_TRACK_CONNECTED);
+        return;
+    }
+
+    if (gamepad_is_connected())
+        return;
+    if (g_idle_sound_started)
+        return;
+    start_idle_sound();
 }
 
 // loop 재생이 이미 진행 중이면 재전송으로 트랙이 재시작되므로,
 // DFPlayer SD 초기화 구간(명령 유실 가능) 동안에만 재전송한다.
 static void process_idle_sound(void) {
+    if (!dfplayer_boot_ready()) return;
     if (gamepad_is_connected()) return;
+    if (!g_idle_sound_started) return;
     if (g_idle_sound_retries >= IDLE_SOUND_MAX_RETRIES) return;
 
     if (now_ms() - g_last_idle_sound_time >= IDLE_SOUND_RETRY_INTERVAL_MS) {
@@ -905,10 +959,11 @@ static void control_task(void* arg) {
             set_turret_target_deg(TURRET_CENTER_DEG, true);  // yaw 90°
             set_pitch_target_deg(PITCH_CENTER_DEG, true);    // pitch 80°
 
-            dfplayer_stop();
-            vTaskDelay(pdMS_TO_TICKS(100));
-            dfplayer_set_volume(g_current_volume);
-            dfplayer_play(DFPLAYER_TRACK_CONNECTED);
+            if (dfplayer_boot_ready()) {
+                dfplayer_play(DFPLAYER_TRACK_CONNECTED);
+            } else {
+                g_pending_connect_sound = true;
+            }
             // 헤드라이트는 Y 토글 — 연결 시 자동 ON 하지 않음
             g_y_pressed = false;
             // 모터 드라이버 enable (IN은 이미 0 / 램프 정지)
@@ -967,6 +1022,7 @@ static void control_task(void* arg) {
             prev_input_stale = false;
         }
 
+        process_dfplayer_boot();
         process_cannon_firing();
         process_machinegun_firing();
         process_recoil();
@@ -1005,6 +1061,8 @@ void app_main(void) {
     gpio_reset_pin(PIN_MOTOR_NSLEEP);
     gpio_set_direction(PIN_MOTOR_NSLEEP, GPIO_MODE_OUTPUT);
     gpio_set_level(PIN_MOTOR_NSLEEP, 0);
+    // DFPlayer RX가 부팅 중 글리치를 보지 않도록 UART idle(High) 유지
+    dfplayer_hold_tx_idle();
 
     // 캐패시터 충전 대기 (이 동안 nSLEEP=LOW)
     vTaskDelay(pdMS_TO_TICKS(2000));
@@ -1055,14 +1113,9 @@ void app_main(void) {
     //    (게임패드 없으면 바로 enable — 스틱 입력 전에도 정지 유지)
     motor_driver_set_enabled(true);
 
-    // DFPlayer 초기화 (실패해도 탱크/BT는 계속)
-    if (dfplayer_init() != ESP_OK) {
-        ESP_LOGW(TAG, "DFPlayer init failed — continuing without sound");
-    } else {
-        dfplayer_set_volume(g_current_volume);
-        vTaskDelay(pdMS_TO_TICKS(200));
-        start_idle_sound();
-    }
+    // DFPlayer UART는 SD 부팅이 끝난 뒤 control_task에서 연결 (실패해도 탱크/BT는 계속)
+    g_dfplayer_ready_at_ms = now_ms() + DFPLAYER_BOOT_SETTLE_MS;
+    ESP_LOGI(TAG, "DFPlayer: UART in %d ms (wait for SD)", DFPLAYER_BOOT_SETTLE_MS);
 
     ESP_LOGI(TAG, "초기화 완료 — BTstack 시작");
 

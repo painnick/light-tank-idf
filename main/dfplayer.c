@@ -4,8 +4,10 @@
  */
 #include "dfplayer.h"
 
+#include "driver/gpio.h"
 #include "driver/uart.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -32,10 +34,17 @@ static const char* TAG = "dfplayer";
 /* 명령 코드 */
 #define DFPLAYER_CMD_PLAY           0x03
 #define DFPLAYER_CMD_VOLUME         0x06
-#define DFPLAYER_CMD_PLAYBACK_MODE  0x08
+#define DFPLAYER_CMD_LOOP_TRACK     0x08  /* DFRobot loop(fileNumber) — 해당 파일 반복 */
+#define DFPLAYER_CMD_SET_DEVICE     0x09  /* 2 = SD */
+#define DFPLAYER_CMD_REPEAT_PLAY    0x11  /* 0=전체 반복 해제 */
 #define DFPLAYER_CMD_STOP           0x16
+#define DFPLAYER_CMD_REPEAT_TRACK   0x19  /* DFRobot: 0=현재곡 반복, 1=해제 */
 
+#define DFPLAYER_DEVICE_SD          2
 #define DFPLAYER_STACK_SIZE 10
+#define DFPLAYER_CMD_GAP_MS 200
+#define DFPLAYER_STOP_SETTLE_MS 300
+#define DFPLAYER_SOURCE_SETTLE_MS 500
 
 typedef struct {
     uint8_t start_byte;
@@ -69,6 +78,17 @@ static esp_err_t dfplayer_send_stack(const dfplayer_stack_t* stack) {
     return (n == DFPLAYER_STACK_SIZE) ? ESP_OK : ESP_FAIL;
 }
 
+static int64_t s_last_cmd_ms;
+static bool s_track_looping;
+
+static void dfplayer_wait_cmd_gap(void) {
+    if (s_last_cmd_ms == 0)
+        return;
+    int64_t elapsed = (esp_timer_get_time() / 1000) - s_last_cmd_ms;
+    if (elapsed < DFPLAYER_CMD_GAP_MS)
+        vTaskDelay(pdMS_TO_TICKS((uint32_t)(DFPLAYER_CMD_GAP_MS - elapsed)));
+}
+
 static esp_err_t dfplayer_send_cmd(uint8_t cmd, uint8_t param_msb, uint8_t param_lsb) {
     dfplayer_stack_t stack = {
         .start_byte = DFPLAYER_SB,
@@ -81,7 +101,10 @@ static esp_err_t dfplayer_send_cmd(uint8_t cmd, uint8_t param_msb, uint8_t param
         .end_byte = DFPLAYER_EB,
     };
     dfplayer_find_checksum(&stack);
-    return dfplayer_send_stack(&stack);
+    dfplayer_wait_cmd_gap();
+    esp_err_t ret = dfplayer_send_stack(&stack);
+    s_last_cmd_ms = esp_timer_get_time() / 1000;
+    return ret;
 }
 
 static bool dfplayer_verify_checksum(const dfplayer_stack_t* stack) {
@@ -130,6 +153,12 @@ static void dfplayer_task(void* arg) {
     }
 }
 
+void dfplayer_hold_tx_idle(void) {
+    gpio_reset_pin(PIN_DFPLAYER_TX);
+    gpio_set_direction(PIN_DFPLAYER_TX, GPIO_MODE_OUTPUT);
+    gpio_set_level(PIN_DFPLAYER_TX, 1);
+}
+
 esp_err_t dfplayer_init(void) {
     uart_config_t uart_config = {
         .baud_rate = UART_BAUD,
@@ -142,15 +171,17 @@ esp_err_t dfplayer_init(void) {
     esp_err_t ret = uart_param_config(UART_NUM, &uart_config);
     if (ret != ESP_OK) return ret;
 
-    const int rx_pin = (PIN_DFPLAYER_RX < 0) ? UART_PIN_NO_CHANGE : PIN_DFPLAYER_RX;
-    ret = uart_set_pin(UART_NUM, PIN_DFPLAYER_TX, rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    if (ret != ESP_OK) return ret;
-
     const int rx_buf = (PIN_DFPLAYER_RX < 0) ? 0 : UART_BUF_SIZE;
     ret = uart_driver_install(UART_NUM, UART_BUF_SIZE, rx_buf, 0, NULL, 0);
     if (ret != ESP_OK) return ret;
 
+    const int rx_pin = (PIN_DFPLAYER_RX < 0) ? UART_PIN_NO_CHANGE : PIN_DFPLAYER_RX;
+    ret = uart_set_pin(UART_NUM, PIN_DFPLAYER_TX, rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    if (ret != ESP_OK) return ret;
+
     vTaskDelay(pdMS_TO_TICKS(200));
+    dfplayer_send_cmd(DFPLAYER_CMD_SET_DEVICE, 0, DFPLAYER_DEVICE_SD);
+    vTaskDelay(pdMS_TO_TICKS(DFPLAYER_SOURCE_SETTLE_MS));
 
     if (PIN_DFPLAYER_RX >= 0) {
         xTaskCreate(dfplayer_task, "dfplayer_rx", 2048, NULL, 5, NULL);
@@ -159,14 +190,29 @@ esp_err_t dfplayer_init(void) {
     return ESP_OK;
 }
 
+/* 0x08 반복은 STOP만으로는 안 풀린다. 일회 재생 전에 모드를 지운다.
+ * 0x19는 재생 중에 보내면 이 모듈에서 즉시 정지되므로, play 이후에 보내지 않는다. */
+static void dfplayer_clear_loop_mode(void) {
+    dfplayer_send_cmd(DFPLAYER_CMD_STOP, 0, 0);
+    dfplayer_send_cmd(DFPLAYER_CMD_REPEAT_PLAY, 0, 0);
+    dfplayer_send_cmd(DFPLAYER_CMD_REPEAT_TRACK, 0, 1);
+    vTaskDelay(pdMS_TO_TICKS(DFPLAYER_STOP_SETTLE_MS));
+    s_track_looping = false;
+}
+
 esp_err_t dfplayer_play(uint8_t track) {
     if (track < 1) return ESP_ERR_INVALID_ARG;
+    if (s_track_looping)
+        dfplayer_clear_loop_mode();
     return dfplayer_send_cmd(DFPLAYER_CMD_PLAY, 0, track);
 }
 
 esp_err_t dfplayer_play_loop(uint8_t track) {
     if (track < 1) return ESP_ERR_INVALID_ARG;
-    return dfplayer_send_cmd(DFPLAYER_CMD_PLAYBACK_MODE, 0, track);
+    /* 0x03+0x19는 클론에서 재생 직후 정지로 해석되는 경우가 있다. */
+    esp_err_t ret = dfplayer_send_cmd(DFPLAYER_CMD_LOOP_TRACK, 0, track);
+    s_track_looping = true;
+    return ret;
 }
 
 esp_err_t dfplayer_set_volume(uint8_t vol) {
@@ -175,5 +221,6 @@ esp_err_t dfplayer_set_volume(uint8_t vol) {
 }
 
 esp_err_t dfplayer_stop(void) {
+    s_track_looping = false;
     return dfplayer_send_cmd(DFPLAYER_CMD_STOP, 0, 0);
 }
