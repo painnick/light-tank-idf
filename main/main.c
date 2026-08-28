@@ -153,7 +153,7 @@ _Static_assert(CONFIG_TURRET_PITCH_MIN_DEG <= CONFIG_TURRET_PITCH_CENTER_DEG
                "Pitch center must be between min and max");
 #define GAMEPAD_CONNECT_GRACE_MS  500 // 연결 직후 입력 무시 (노이즈/잔여 D-Pad 방지)
 #define DPAD_QUIET_AFTER_BUTTON_MS 300 // L1/R1·페이스 버튼 직후 hat 노이즈 무시
-#define DPAD_LATCH_BLOCK_MASK \
+#define DPAD_HOLD_BLOCK_MASK \
     (BUTTON_SHOULDER_L | BUTTON_SHOULDER_R | BUTTON_A | BUTTON_B | BUTTON_X | BUTTON_Y)
 #define GAMEPAD_STICK_DEADZONE    50
 #define GAMEPAD_INPUT_TIMEOUT_MS  1000 // 스틱이 살아 있는데 리포트가 끊기면 트랙 정지 (BLE는 무입력 때 리포트를 안 보냄)
@@ -209,24 +209,8 @@ static bool g_turret_attached = false;
 static bool g_turret_hold_left = false;
 static bool g_turret_hold_right = false;
 
-typedef enum {
-    YAW_LATCH_NONE = 0,
-    YAW_LATCH_LEFT,
-    YAW_LATCH_RIGHT,
-} yaw_latch_t;
-
-typedef enum {
-    PITCH_LATCH_NONE = 0,
-    PITCH_LATCH_UP,
-    PITCH_LATCH_DOWN,
-} pitch_latch_t;
-
-// GamePadPlus V3(Home+X): D-Pad hat은 ~70ms 펄스만 오고, L1/R1 릴리스 리포트에
-// 가짜 LEFT/RIGHT가 섞인다. 깨끗한 새 BLE 리포트의 rising edge만 래치한다.
-static yaw_latch_t g_yaw_latch = YAW_LATCH_NONE;
-static pitch_latch_t g_pitch_latch = PITCH_LATCH_NONE;
+// GamePadPlus V3: L1/R1 릴리스 리포트에 hat 노이즈가 섞임. 새 BLE 리포트만 반영.
 static uint32_t s_last_dpad_report_seq = 0;
-static uint8_t s_last_clean_dpad = 0;
 static uint16_t s_prev_block_buttons = 0;
 static int64_t s_dpad_quiet_until_ms = 0;
 
@@ -701,11 +685,8 @@ static uint8_t dpad_filter_opposing(uint8_t mask, uint8_t neg, uint8_t pos) {
     return mask;
 }
 
-static void reset_dpad_latch(void) {
-    g_yaw_latch = YAW_LATCH_NONE;
-    g_pitch_latch = PITCH_LATCH_NONE;
+static void reset_dpad_holds(void) {
     s_last_dpad_report_seq = 0;
-    s_last_clean_dpad = 0;
     s_prev_block_buttons = 0;
     s_dpad_quiet_until_ms = 0;
     g_turret_hold_left = false;
@@ -714,8 +695,18 @@ static void reset_dpad_latch(void) {
     g_pitch_hold_down = false;
 }
 
-static void sync_holds_from_latch(void) {
-    if (g_l1_pressed || g_r1_pressed) {
+static void apply_dpad_holds(uint8_t dpad, uint16_t buttons, uint32_t report_seq) {
+    if (report_seq == s_last_dpad_report_seq) {
+        return;
+    }
+    s_last_dpad_report_seq = report_seq;
+
+    uint16_t block = buttons & DPAD_HOLD_BLOCK_MASK;
+    if (block != s_prev_block_buttons) {
+        s_dpad_quiet_until_ms = now_ms() + DPAD_QUIET_AFTER_BUTTON_MS;
+        s_prev_block_buttons = block;
+    }
+    if (block != 0 || now_ms() < s_dpad_quiet_until_ms) {
         g_turret_hold_left = false;
         g_turret_hold_right = false;
         g_pitch_hold_up = false;
@@ -723,49 +714,12 @@ static void sync_holds_from_latch(void) {
         return;
     }
 
-    g_turret_hold_left = (g_yaw_latch == YAW_LATCH_LEFT);
-    g_turret_hold_right = (g_yaw_latch == YAW_LATCH_RIGHT);
-    g_pitch_hold_up = (g_pitch_latch == PITCH_LATCH_UP);
-    g_pitch_hold_down = (g_pitch_latch == PITCH_LATCH_DOWN);
-}
-
-static void update_dpad_latch(uint8_t dpad, uint16_t buttons, uint32_t report_seq) {
-    if (report_seq == s_last_dpad_report_seq) {
-        return;
-    }
-    s_last_dpad_report_seq = report_seq;
-
-    uint16_t block = buttons & DPAD_LATCH_BLOCK_MASK;
-    if (block != s_prev_block_buttons) {
-        s_dpad_quiet_until_ms = now_ms() + DPAD_QUIET_AFTER_BUTTON_MS;
-        s_prev_block_buttons = block;
-    }
-    if (block != 0 || now_ms() < s_dpad_quiet_until_ms) {
-        return;
-    }
-
     uint8_t yaw = dpad_filter_opposing(dpad, DPAD_LEFT, DPAD_RIGHT);
     uint8_t pitch = dpad_filter_opposing(dpad, DPAD_UP, DPAD_DOWN);
-    uint8_t prev_yaw_dpad = dpad_filter_opposing(s_last_clean_dpad, DPAD_LEFT, DPAD_RIGHT);
-    uint8_t prev_pitch_dpad = dpad_filter_opposing(s_last_clean_dpad, DPAD_UP, DPAD_DOWN);
-    s_last_clean_dpad = dpad;
-
-    bool left_rise = (yaw & DPAD_LEFT) && !(prev_yaw_dpad & DPAD_LEFT);
-    bool right_rise = (yaw & DPAD_RIGHT) && !(prev_yaw_dpad & DPAD_RIGHT);
-    bool up_rise = (pitch & DPAD_UP) && !(prev_pitch_dpad & DPAD_UP);
-    bool down_rise = (pitch & DPAD_DOWN) && !(prev_pitch_dpad & DPAD_DOWN);
-
-    if (left_rise) {
-        g_yaw_latch = (g_yaw_latch == YAW_LATCH_NONE) ? YAW_LATCH_LEFT : YAW_LATCH_NONE;
-    } else if (right_rise) {
-        g_yaw_latch = (g_yaw_latch == YAW_LATCH_NONE) ? YAW_LATCH_RIGHT : YAW_LATCH_NONE;
-    }
-
-    if (up_rise) {
-        g_pitch_latch = (g_pitch_latch == PITCH_LATCH_NONE) ? PITCH_LATCH_UP : PITCH_LATCH_NONE;
-    } else if (down_rise) {
-        g_pitch_latch = (g_pitch_latch == PITCH_LATCH_NONE) ? PITCH_LATCH_DOWN : PITCH_LATCH_NONE;
-    }
+    g_turret_hold_left = (yaw & DPAD_LEFT) != 0;
+    g_turret_hold_right = (yaw & DPAD_RIGHT) != 0;
+    g_pitch_hold_up = (pitch & DPAD_UP) != 0;
+    g_pitch_hold_down = (pitch & DPAD_DOWN) != 0;
 }
 
 static void process_gamepad(int32_t axis_y, int32_t axis_ry,
@@ -785,14 +739,16 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
         set_track_targets(left_y, right_y);
     }
 
-    update_dpad_latch(dpad, buttons, report_seq);
+    apply_dpad_holds(dpad, buttons, report_seq);
 
     if (misc_buttons & MISC_BUTTON_START) {
         if (!g_start_pressed) {
             g_start_pressed = true;
             g_pitch_last_input_ms = now_ms();
-            g_yaw_latch = YAW_LATCH_NONE;
-            g_pitch_latch = PITCH_LATCH_NONE;
+            g_turret_hold_left = false;
+            g_turret_hold_right = false;
+            g_pitch_hold_up = false;
+            g_pitch_hold_down = false;
             set_turret_target_deg(TURRET_CENTER_DEG, true);
             set_pitch_target_deg(PITCH_CENTER_DEG, true);
         }
@@ -877,8 +833,6 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
             save_volume_to_nvs(g_current_volume);
         }
     }
-
-    sync_holds_from_latch();
 }
 
 // ============================================================================
@@ -1047,7 +1001,7 @@ static void control_task(void* arg) {
             int64_t now = now_ms();
             g_input_ignore_until_ms = now + GAMEPAD_CONNECT_GRACE_MS;
             g_pitch_last_input_ms = now;
-            reset_dpad_latch();
+            reset_dpad_holds();
             set_track_targets(0, 0);
             set_turret_target_deg(TURRET_CENTER_DEG, true);
             set_pitch_target_deg(PITCH_CENTER_DEG, true);
@@ -1072,7 +1026,7 @@ static void control_task(void* arg) {
             motor_driver_set_enabled(false); // nSLEEP LOW — 부팅 외 안전 컷오프
             turret_detach();
             pitch_detach();
-            reset_dpad_latch();
+            reset_dpad_holds();
             g_cannon_pending = false;
             g_cannon_firing = false;
             g_recoil_pending = false;
@@ -1102,7 +1056,7 @@ static void control_task(void* arg) {
                 if (!g_recoil_active) {
                     set_track_targets(0, 0);
                 }
-                reset_dpad_latch();
+                reset_dpad_holds();
                 if (!prev_input_stale) {
                     ESP_LOGW(TAG, "게임패드 입력 타임아웃 — 트랙 정지");
                 }

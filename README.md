@@ -146,7 +146,7 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 - **패드 연결 / Start**: Kconfig `TURRET_YAW_CENTER_DEG` (기본 **90°**)
 - **범위**: `TURRET_YAW_MIN_DEG` ~ `TURRET_YAW_MAX_DEG` (기본 **0°~180°**)
-- **D-Pad ←/→**: 1회 누르면 해당 방향 **연속 회전** (GamePadPlus V3 Home+X hat 펄스 대응). **정지=같은 방향 재누름 / 반대 방향 / Start**
+- **D-Pad ←/→**: 누르는 동안 연속 슬루 (`TURRET_YAW_HOLD_STEP_X10`, 기본 0.2°/10ms)
 - **패드 연결 중**: PWM 유지 (idle detach 없음)
 - **연결 해제**: detach
 
@@ -154,7 +154,7 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 - **패드 연결 / Start**: Kconfig `TURRET_PITCH_CENTER_DEG` (Light Tank 기본 **45°**)
 - **범위**: `TURRET_PITCH_MIN_DEG` ~ `TURRET_PITCH_MAX_DEG` (Light Tank 기본 **15°~75°**)
-- **D-Pad ↑/↓**: 1회 누르면 해당 방향 **연속 스텝** (정지=같은 방향 재누름 / 반대 / Start). `TURRET_PITCH_STEP_DEG` / `TURRET_PITCH_HOLD_INTERVAL_MS`
+- **D-Pad ↑/↓ 홀드**: `TURRET_PITCH_STEP_DEG`°씩, `TURRET_PITCH_HOLD_INTERVAL_MS` ms 간격 (기본 1° / 50ms)
 - **슬루**: 목표까지 부드럽게 이동
 - **패드 연결 중**: PWM 유지 (idle detach 없음)
 - **연결 해제**: detach
