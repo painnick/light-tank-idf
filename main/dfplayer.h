@@ -21,6 +21,7 @@ extern "C" {
 void dfplayer_hold_tx_idle(void);
 esp_err_t dfplayer_init(void);
 esp_err_t dfplayer_play(uint8_t track);
+esp_err_t dfplayer_play_effect(uint8_t track); /* 효과음 — STOP/루프 해제 생략, 즉시 PLAY */
 esp_err_t dfplayer_play_loop(uint8_t track);
 esp_err_t dfplayer_set_volume(uint8_t vol);
 esp_err_t dfplayer_stop(void);

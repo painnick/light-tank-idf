@@ -107,6 +107,23 @@ static esp_err_t dfplayer_send_cmd(uint8_t cmd, uint8_t param_msb, uint8_t param
     return ret;
 }
 
+static esp_err_t dfplayer_send_cmd_now(uint8_t cmd, uint8_t param_msb, uint8_t param_lsb) {
+    dfplayer_stack_t stack = {
+        .start_byte = DFPLAYER_SB,
+        .version = DFPLAYER_VER,
+        .length = DFPLAYER_LEN,
+        .command_value = cmd,
+        .feedback_value = DFPLAYER_NO_FEEDBACK,
+        .param_msb = param_msb,
+        .param_lsb = param_lsb,
+        .end_byte = DFPLAYER_EB,
+    };
+    dfplayer_find_checksum(&stack);
+    esp_err_t ret = dfplayer_send_stack(&stack);
+    s_last_cmd_ms = esp_timer_get_time() / 1000;
+    return ret;
+}
+
 static bool dfplayer_verify_checksum(const dfplayer_stack_t* stack) {
     uint16_t sum = (uint16_t)(stack->version + stack->length + stack->command_value
                               + stack->feedback_value + stack->param_msb + stack->param_lsb);
@@ -205,6 +222,13 @@ esp_err_t dfplayer_play(uint8_t track) {
     if (s_track_looping)
         dfplayer_clear_loop_mode();
     return dfplayer_send_cmd(DFPLAYER_CMD_PLAY, 0, track);
+}
+
+esp_err_t dfplayer_play_effect(uint8_t track) {
+    if (track < 1) return ESP_ERR_INVALID_ARG;
+    /* STOP·루프 해제 생략 — 대기 루프 위 PLAY 겹침 (명령 전송 지연 ~500ms+ 단축) */
+    s_track_looping = false;
+    return dfplayer_send_cmd_now(DFPLAYER_CMD_PLAY, 0, track);
 }
 
 esp_err_t dfplayer_play_loop(uint8_t track) {
