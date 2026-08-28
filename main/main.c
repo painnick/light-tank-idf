@@ -116,7 +116,9 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 #define IDLE_SOUND_RETRY_INTERVAL_MS  4000
 #define IDLE_SOUND_MAX_RETRIES        1
 #define VOLUME_CHANGE_INTERVAL  100
-#define CANNON_LED_DURATION     200
+#define CANNON_LED_DURATION       200
+#define CANNON_FOLLOWUP_DELAY_MS  500   // 효과음 명령 후 LED 시작
+#define CANNON_RECOIL_DELAY_MS    500   // LED 시작 후 트랙 후진 리코일
 #define MACHINE_GUN_DURATION    500   // panzer4 MG_FIRE_MS — LED 깜빡임 지속
 #define MG_LED_DELAY_MS         500   // DFPlayer 효과음 지연에 맞춰 LED 시작
 #define MG_LED_BLINK_MS         75    // panzer4 게틀링 LED 깜빡임 주기
@@ -143,7 +145,6 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 #define GAMEPAD_CONNECT_GRACE_MS  500 // 연결 직후 입력 무시 (노이즈/잔여 D-Pad 방지)
 #define GAMEPAD_STICK_DEADZONE    50
 #define GAMEPAD_INPUT_TIMEOUT_MS  1000 // 스틱이 살아 있는데 리포트가 끊기면 트랙 정지 (BLE는 무입력 때 리포트를 안 보냄)
-#define RECOIL_DELAY_MS         250   // LED·효과음 후 반동 시작 지연 (ms)
 #define RECOIL_BACK_DURATION    40    // 포 발사 시 후진 시간 (ms)
 #define RECOIL_SETTLE_DURATION  40    // 후진 후 정지 안정화 (ms)
 
@@ -208,12 +209,15 @@ static bool g_pitch_hold_down = false;
 // 게임패드 연결 직후 입력 무시 시각
 static int64_t g_input_ignore_until_ms = 0;
 
-// 포신 발사
+// 포신 발사 — pending: 효과음 후 대기, firing: LED ON 구간
+static bool g_cannon_pending = false;
+static int64_t g_cannon_followup_at_ms = 0;
 static bool g_cannon_firing = false;
-static int64_t g_cannon_start_time = 0;
+static int64_t g_cannon_end_ms = 0;
 
-// 리코일 (pending: LED/효과음 대기 → active: 후진/안정화)
+// 리코일 (pending: LED 후 대기 → active: 후진/안정화)
 static bool g_recoil_pending = false;
+static int64_t g_recoil_at_ms = 0;
 static bool g_recoil_active = false;
 static int64_t g_recoil_start_time = 0;
 
@@ -739,20 +743,18 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
         g_y_pressed = false;
     }
 
-    // B 버튼: LED·효과음 먼저, 반동은 RECOIL_DELAY_MS 후 process_recoil()
-    if ((buttons & BUTTON_B) && !g_cannon_firing && !g_machinegun_firing
+    // B 버튼: 포신 — 효과음 즉시 → 500ms 후 LED → 500ms 후 리코일
+    if ((buttons & BUTTON_B) && !g_cannon_pending && !g_cannon_firing && !g_machinegun_firing
             && !g_recoil_pending && !g_recoil_active) {
-        g_cannon_firing = true;
-        g_cannon_start_time = now_ms();
-        gpio_set_level(PIN_CANNON_LED, 1);
-        dfplayer_play(DFPLAYER_TRACK_CANNON);
-
-        g_recoil_pending = true;
-        g_recoil_start_time = now_ms();
+        int64_t press_ms = now_ms();
+        dfplayer_play_effect(DFPLAYER_TRACK_CANNON);
+        g_cannon_pending = true;
+        g_cannon_followup_at_ms = press_ms + CANNON_FOLLOWUP_DELAY_MS;
+        gpio_set_level(PIN_CANNON_LED, 0);
     }
 
     // A 버튼: 기관총 — 효과음 즉시, LED는 DFPlayer 지연(MG_LED_DELAY_MS) 후 깜빡임
-    if ((buttons & BUTTON_A) && !g_machinegun_firing && !g_cannon_firing) {
+    if ((buttons & BUTTON_A) && !g_machinegun_firing && !g_cannon_pending && !g_cannon_firing) {
         int64_t press_ms = now_ms();
         dfplayer_play_effect(DFPLAYER_TRACK_MACHINEGUN);
         g_machinegun_firing = true;
@@ -811,9 +813,20 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
 // ============================================================================
 // 타이머 기반 처리
 // ============================================================================
-static void process_cannon_firing(void) {
-    if (!g_cannon_firing) return;
-    if (now_ms() - g_cannon_start_time >= CANNON_LED_DURATION) {
+static void process_cannon_sequence(void) {
+    int64_t now = now_ms();
+
+    if (g_cannon_pending && now >= g_cannon_followup_at_ms) {
+        g_cannon_pending = false;
+        g_cannon_firing = true;
+        g_cannon_end_ms = now + CANNON_LED_DURATION;
+        gpio_set_level(PIN_CANNON_LED, 1);
+
+        g_recoil_pending = true;
+        g_recoil_at_ms = now + CANNON_RECOIL_DELAY_MS;
+    }
+
+    if (g_cannon_firing && now >= g_cannon_end_ms) {
         g_cannon_firing = false;
         gpio_set_level(PIN_CANNON_LED, 0);
     }
@@ -852,16 +865,14 @@ static void process_machinegun_firing(void) {
 static void process_recoil(void) {
     int64_t now = now_ms();
 
-    // LED·효과음 재생 후 반동 시작
     if (g_recoil_pending) {
-        if (now - g_recoil_start_time < RECOIL_DELAY_MS) {
+        if (now < g_recoil_at_ms) {
             return;
         }
         g_recoil_pending = false;
         g_recoil_active = true;
         g_recoil_start_time = now;
         set_track_immediate(RECOIL_BACK_SPEED, RECOIL_BACK_SPEED);
-        return;
     }
 
     if (!g_recoil_active) return;
@@ -998,6 +1009,10 @@ static void control_task(void* arg) {
             g_turret_hold_right = false;
             g_pitch_hold_up = false;
             g_pitch_hold_down = false;
+            g_cannon_pending = false;
+            g_cannon_firing = false;
+            g_recoil_pending = false;
+            g_recoil_active = false;
             g_machinegun_firing = false;
             g_mg_led_on = false;
             g_y_pressed = false;
@@ -1038,7 +1053,7 @@ static void control_task(void* arg) {
         }
 
         process_dfplayer_boot();
-        process_cannon_firing();
+        process_cannon_sequence();
         process_machinegun_firing();
         process_recoil();
         process_motor_ramp();

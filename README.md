@@ -12,7 +12,7 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 | 트랙 구동 | DRV8833, 좌/우 스틱 Y축 — panzer4식 가속/감속 램프(~1초 최대) |
 | 터렛 좌우 | SG90 — D-Pad ←/→ 연속 슬루, 3초 무입력 detach |
 | 터렛 상하 | SG90(GPIO23) — 연결 시 **45°**, 범위 **15°~75°**, D-Pad ↑/↓ **1°** 연속(홀드), 3초 무입력 detach |
-| 포신 | B 버튼 — LED·효과음 후 트랙 후진 리코일 |
+| 포신 | B 버튼 — 효과음 즉시, 약 0.5초 후 LED, 약 1초 후 트랙 후진 리코일 |
 | 게틀링(기관총) | A 버튼 — 효과음 즉시, 0.5초 후 LED 깜빡임 (~0.5초) |
 | 볼륨 | L1 / R1 (홀드 시 100ms마다 1단계, 즉시 반영), 릴리스 시 NVS 저장 |
 | 사운드 | DFPlayer Mini (대기 / 포 / 기관총 / 연결음) |
@@ -138,7 +138,7 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 | D-Pad ↑ / ↓ | 터렛 **상하** 1° 연속 (**15°~75°**, 누르는 동안, 연결 시 45°) |
 | Start | 좌우 90° / 상하 45° |
 | A | 게틀링(기관총) — 효과음 즉시, **0.5초 후** LED 75ms 깜빡임 약 0.5초 |
-| B | 포신 — LED·효과음 후 리코일(후진) |
+| B | 포신 — **효과음 즉시**, 약 **0.5초 후** LED, 약 **1초 후** 리코일(후진) |
 | Y | 헤드라이트 On/Off 토글 (길게 눌러도 1회만) |
 | L1 / R1 | 볼륨 감소 / 증가 |
 
@@ -159,9 +159,9 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 ### 포 발사 시퀀스 (B)
 
-1. 포신 LED ON + 포 효과음 재생
-2. `RECOIL_DELAY_MS`(기본 250ms) 대기
-3. 트랙 후진 리코일 (`RECOIL_BACK_DURATION` 40ms) → 정지 안정화 (`RECOIL_SETTLE_DURATION` 40ms)
+1. 포 효과음 재생 명령 (즉시) — DFPlayer 실제 재생은 약 0.5초 후
+2. `CANNON_FOLLOWUP_DELAY_MS`(500ms) 후 포신 LED ON (`CANNON_LED_DURATION` 200ms)
+3. LED 시작 `CANNON_RECOIL_DELAY_MS`(500ms) 후 트랙 후진 리코일 (`RECOIL_BACK_DURATION` 40ms) → 정지 안정화 (`RECOIL_SETTLE_DURATION` 40ms)
 
 스틱 전진이 음수 축이므로 리코일 후진은 양수 모터 속도(`RECOIL_BACK_SPEED`)를 사용합니다. 리코일 중에는 스틱 모터 입력을 잠시 무시합니다.
 
