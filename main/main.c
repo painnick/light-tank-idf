@@ -117,7 +117,8 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 #define IDLE_SOUND_MAX_RETRIES        1
 #define VOLUME_CHANGE_INTERVAL  100
 #define CANNON_LED_DURATION     200
-#define MACHINE_GUN_DURATION    500   // panzer4 MG_FIRE_MS
+#define MACHINE_GUN_DURATION    500   // panzer4 MG_FIRE_MS — LED 깜빡임 지속
+#define MG_LED_DELAY_MS         500   // DFPlayer 효과음 지연에 맞춰 LED 시작
 #define MG_LED_BLINK_MS         75    // panzer4 게틀링 LED 깜빡임 주기
 // 터렛: 0.1° 단위(x10)로 매 루프 목표·출력을 같이 움직여 "멈춤-재개" 끊김 제거
 // 10ms마다 1 = 0.1° → 약 10°/s (이전 100ms/1°와 동일 속도, 연속 보간)
@@ -216,9 +217,10 @@ static bool g_recoil_pending = false;
 static bool g_recoil_active = false;
 static int64_t g_recoil_start_time = 0;
 
-// 기관총(게틀링)
+// 기관총(게틀링) — 효과음 즉시, LED는 MG_LED_DELAY_MS 후 깜빡임
 static bool g_machinegun_firing = false;
-static int64_t g_machinegun_start_time = 0;
+static int64_t g_machinegun_led_start_ms = 0;
+static int64_t g_machinegun_end_ms = 0;
 static bool g_mg_led_on = false;
 static int64_t g_mg_led_last_toggle = 0;
 
@@ -749,14 +751,16 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
         g_recoil_start_time = now_ms();
     }
 
-    // A 버튼: 기관총(게틀링) 발사 — LED 깜빡임 + 효과음
+    // A 버튼: 기관총 — 효과음 즉시, LED는 DFPlayer 지연(MG_LED_DELAY_MS) 후 깜빡임
     if ((buttons & BUTTON_A) && !g_machinegun_firing && !g_cannon_firing) {
+        int64_t press_ms = now_ms();
+        dfplayer_play_effect(DFPLAYER_TRACK_MACHINEGUN);
         g_machinegun_firing = true;
-        g_machinegun_start_time = now_ms();
-        g_mg_led_on = true;
-        g_mg_led_last_toggle = now_ms();
-        gpio_set_level(PIN_MG_LED, 1);
-        dfplayer_play(DFPLAYER_TRACK_MACHINEGUN);
+        g_machinegun_led_start_ms = press_ms + MG_LED_DELAY_MS;
+        g_machinegun_end_ms = g_machinegun_led_start_ms + MACHINE_GUN_DURATION;
+        g_mg_led_on = false;
+        g_mg_led_last_toggle = 0;
+        gpio_set_level(PIN_MG_LED, 0);
     }
 
     // L1: 볼륨 감소 (홀드 중 100ms마다 1단계, 즉시 반영 / 릴리스 시 NVS 저장)
@@ -815,15 +819,26 @@ static void process_cannon_firing(void) {
     }
 }
 
-// panzer4: MG_LED_BLINK_MS 주기로 토글, MG_FIRE_MS 후 소등
+// MG_LED_DELAY_MS 후 MG_LED_BLINK_MS 주기로 토글, MACHINE_GUN_DURATION 후 소등
 static void process_machinegun_firing(void) {
     if (!g_machinegun_firing) return;
 
     int64_t now = now_ms();
-    if (now - g_machinegun_start_time >= MACHINE_GUN_DURATION) {
+    if (now >= g_machinegun_end_ms) {
         g_machinegun_firing = false;
         g_mg_led_on = false;
         gpio_set_level(PIN_MG_LED, 0);
+        return;
+    }
+
+    if (now < g_machinegun_led_start_ms) {
+        return;
+    }
+
+    if (g_mg_led_last_toggle < g_machinegun_led_start_ms) {
+        g_mg_led_on = true;
+        g_mg_led_last_toggle = now;
+        gpio_set_level(PIN_MG_LED, 1);
         return;
     }
 
