@@ -21,6 +21,7 @@ typedef struct {
     uint8_t misc_buttons;
 
     int64_t last_report_ms; // 마지막 컨트롤러 리포트 수신 시각 (failsafe용)
+    uint32_t report_seq;    // BLE HID 리포트 번호 (캐시 재적용과 구분)
 
     bool connected;
     bool new_connection;
@@ -95,6 +96,7 @@ static void my_platform_on_device_disconnected(uni_hid_device_t* d) {
         g_gamepad.axis_ry = 0;
         g_gamepad.misc_buttons = 0;
         g_gamepad.last_report_ms = 0;
+        g_gamepad.report_seq = 0;
         xSemaphoreGive(g_gamepad.mutex);
     }
 }
@@ -113,6 +115,7 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t* d) {
         g_gamepad.dpad = 0;
         g_gamepad.misc_buttons = 0;
         g_gamepad.last_report_ms = esp_timer_get_time() / 1000; // 연결 직후를 stale로 오인하지 않게
+        g_gamepad.report_seq = 0;
         g_gamepad.connected = true;
         g_gamepad.new_connection = true;
         xSemaphoreGive(g_gamepad.mutex);
@@ -128,13 +131,14 @@ static void my_platform_on_controller_data(uni_hid_device_t* d, uni_controller_t
 
     const uni_gamepad_t* gp = &ctl->gamepad;
 
-    if (xSemaphoreTake(g_gamepad.mutex, pdMS_TO_TICKS(0)) == pdTRUE) {
+    if (xSemaphoreTake(g_gamepad.mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
         g_gamepad.axis_y = gp->axis_y;
         g_gamepad.axis_ry = gp->axis_ry;
         g_gamepad.buttons = gp->buttons;
         g_gamepad.dpad = gp->dpad;
         g_gamepad.misc_buttons = gp->misc_buttons;
         g_gamepad.last_report_ms = esp_timer_get_time() / 1000;
+        g_gamepad.report_seq++;
         xSemaphoreGive(g_gamepad.mutex);
     }
 }
@@ -209,6 +213,15 @@ int64_t gamepad_last_report_ms(void) {
     int64_t ret = 0;
     if (xSemaphoreTake(g_gamepad.mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
         ret = g_gamepad.last_report_ms;
+        xSemaphoreGive(g_gamepad.mutex);
+    }
+    return ret;
+}
+
+uint32_t gamepad_report_seq(void) {
+    uint32_t ret = 0;
+    if (xSemaphoreTake(g_gamepad.mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        ret = g_gamepad.report_seq;
         xSemaphoreGive(g_gamepad.mutex);
     }
     return ret;

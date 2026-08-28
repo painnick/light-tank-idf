@@ -10,8 +10,8 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 | 기능 | 설명 |
 |------|------|
 | 트랙 구동 | DRV8833, 좌/우 스틱 Y축 — panzer4식 가속/감속 램프(~1초 최대) |
-| 터렛 좌우 | SG90 — D-Pad ←/→ 연속 슬루, 3초 무입력 detach |
-| 터렛 상하 | SG90(GPIO23) — 연결/Start 시 Kconfig 센터, D-Pad ↑/↓ 홀드 스텝, 3초 무입력 detach |
+| 터렛 좌우 | SG90 — D-Pad ←/→ 연속 슬루, 연결 중 PWM 유지 |
+| 터렛 상하 | SG90(GPIO23) — 연결/Start 시 Kconfig 센터, D-Pad ↑/↓ 홀드 스텝 |
 | 포신 | B 버튼 — 효과음 즉시, 약 0.5초 후 LED, 약 1초 후 트랙 후진 리코일 |
 | 게틀링(기관총) | A 버튼 — 효과음 즉시, 0.5초 후 LED 깜빡임 (~0.5초) |
 | 볼륨 | L1 / R1 (홀드 시 100ms마다 1단계, 즉시 반영), 릴리스 시 NVS 저장 |
@@ -22,7 +22,7 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 
 - **MCU**: ESP32-C6 Super Mini (BLE — Classic BT 미사용)
 - **모터 드라이버**: DRV8833
-- **서보**: SG90 ×2 (좌우 yaw GPIO21, 상하 pitch GPIO23)
+- **서보**: SG90 ×2 (좌우 yaw GPIO7/EXT3, 상하 pitch GPIO23)
 - **오디오**: DFPlayer Mini + microSD
 - **입력**: BLE HID 게임패드 (검증: GamePadPlus V3 / ShanWan BM-769)
 
@@ -40,7 +40,7 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 | 헤드라이트 (HeadLight) | **20** |
 | 포신 LED (CannonLED) | **19** |
 | 게틀링 LED (MG) | **18** |
-| 터렛 좌우 서보 (yaw) | 21 |
+| 터렛 좌우 서보 (yaw) | **7** (EXT3) |
 | 터렛 상하 서보 (pitch) | **23** |
 | DFPlayer TX (→ DFPlayer RX) | 22 |
 | DFPlayer RX | **미사용 (-1)** |
@@ -99,11 +99,11 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 **주요 연결:**
 - **DRV8833**: `MT1`/`MT2` 모터 커넥터, 입력 `Motor-IN-A1/A2/B1/B2`, `nSLEEP`=GPIO6
-- **터렛 좌우**: `TURRET` — 신호 GPIO21, 5V, GND
+- **터렛 좌우**: `EXT3` — 신호 **GPIO7**, 5V, GND
 - **터렛 상하**: pitch 서보 — 신호 **GPIO23**, 5V, GND
 - **사운드**: DFPlayer Mini — ESP32 TX(GPIO22) → DFPlayer RX, `SPK` 스피커 커넥터
 - **조명**: 헤드라이트 GPIO20 + Q1(IRLML6344), 포신/게틀링 LED GPIO19/18
-- **확장**: `EXT3`(GPIO7) 등
+- **확장**: yaw 서보가 `EXT3`를 사용
 - **전원**: 배터리 → BoostCharger(U3) → 전원 스위치(U4) → 5V/VCC/GND
 
 ### 3D 출력 (`3dp/`)
@@ -142,20 +142,22 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 | Y | 헤드라이트 On/Off 토글 (길게 눌러도 1회만) |
 | L1 / R1 | 볼륨 감소 / 증가 |
 
-### 터렛 좌우 (yaw, GPIO21)
+### 터렛 좌우 (yaw, GPIO7)
 
 - **패드 연결 / Start**: Kconfig `TURRET_YAW_CENTER_DEG` (기본 **90°**)
 - **범위**: `TURRET_YAW_MIN_DEG` ~ `TURRET_YAW_MAX_DEG` (기본 **0°~180°**)
-- **D-Pad ←/→**: 0.1° 단위 연속 슬루 (`TURRET_YAW_HOLD_STEP_X10`, 기본 0.2°/10ms)
-- **3초 무입력**(슬루 완료 후): detach
+- **D-Pad ←/→**: 1회 누르면 해당 방향 **연속 회전** (GamePadPlus V3 Home+X hat 펄스 대응). **정지=같은 방향 재누름 / 반대 방향 / Start**
+- **패드 연결 중**: PWM 유지 (idle detach 없음)
+- **연결 해제**: detach
 
 ### 터렛 상하 (pitch, GPIO23)
 
 - **패드 연결 / Start**: Kconfig `TURRET_PITCH_CENTER_DEG` (Light Tank 기본 **45°**)
 - **범위**: `TURRET_PITCH_MIN_DEG` ~ `TURRET_PITCH_MAX_DEG` (Light Tank 기본 **15°~75°**)
-- **D-Pad ↑/↓ 홀드**: `TURRET_PITCH_STEP_DEG`°씩, `TURRET_PITCH_HOLD_INTERVAL_MS` ms 간격 (기본 1° / 50ms)
+- **D-Pad ↑/↓**: 1회 누르면 해당 방향 **연속 스텝** (정지=같은 방향 재누름 / 반대 / Start). `TURRET_PITCH_STEP_DEG` / `TURRET_PITCH_HOLD_INTERVAL_MS`
 - **슬루**: 목표까지 부드럽게 이동
-- **3초 무입력**(슬루 완료 후): detach
+- **패드 연결 중**: PWM 유지 (idle detach 없음)
+- **연결 해제**: detach
 
 각도는 `idf.py menuconfig` → **RC Tank Turret Servos** 에서 변경합니다.
 

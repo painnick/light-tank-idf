@@ -62,9 +62,10 @@ menu "RC Tank Hardware Pins"
     config PIN_TURRET_SERVO
         int "Turret yaw servo PWM (left/right)"
         range 0 30
-        default 21
+        default 7
         help
-            Turret horizontal (yaw) SG90 PWM. Default: GPIO21.
+            Turret horizontal (yaw) SG90 PWM. Default: GPIO7 (EXT3).
+            GPIO21 sits next to DFPlayer TX (GPIO22) and couples into the servo.
 
     config PIN_TURRET_PITCH
         int "Turret pitch servo PWM (up/down)"
@@ -93,7 +94,7 @@ endmenu
 
 menu "RC Tank Turret Servos"
 
-    comment "Yaw (left/right, GPIO21) — D-Pad hold moves target continuously"
+    comment "Yaw (left/right, GPIO7 / EXT3) — D-Pad hold moves target continuously"
 
     config TURRET_YAW_CENTER_DEG
         int "Yaw center angle on connect / Start (degrees)"
