@@ -129,13 +129,13 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 #define TURRET_CENTER_X10    (TURRET_CENTER_DEG * TURRET_DEG_SCALE)
 #define TURRET_MAX_X10       (180 * TURRET_DEG_SCALE)
 
-// 포탑 상하(pitch) — GPIO23, 연결 시 80°, 범위 60°~110°, 홀드 시 1°씩 연속, 3초 무입력 detach
+// 포탑 상하(pitch) — GPIO23, 연결 시 45°, 범위 15°~75°, 홀드 시 1°씩 연속, 3초 무입력 detach
 #define PITCH_STEP_DEG                 1   // 홀드 중 목표 1° 단위
 #define PITCH_HOLD_INTERVAL_MS        50   // 홀드 시 1° 간격 (ms)
 #define PITCH_IDLE_DISCONNECT_MS    3000
-#define PITCH_CENTER_DEG              80  // 패드 연결 / Start 시
-#define PITCH_MIN_DEG                 60  // 아래 한계
-#define PITCH_MAX_DEG                110  // 위 한계
+#define PITCH_CENTER_DEG              45  // 패드 연결 / Start 시
+#define PITCH_MIN_DEG                 15  // 아래 한계
+#define PITCH_MAX_DEG                 75  // 위 한계
 #define PITCH_SLEW_X10_PER_LOOP       10  // 10ms당 1° — 1° 스텝을 빠르게 따라감
 #define PITCH_MIN_X10   (PITCH_MIN_DEG * TURRET_DEG_SCALE)
 #define PITCH_MAX_X10   (PITCH_MAX_DEG * TURRET_DEG_SCALE)
@@ -572,7 +572,7 @@ static int clamp_pitch_x10(int x10) {
 
 static void pitch_apply_pwm_x10(int angle_x10) {
     angle_x10 = clamp_pitch_x10(angle_x10);
-    // duty 맵은 0~180° 전체 스케일 유지 (실제 명령만 30~135로 제한)
+    // duty 맵은 0~180° 전체 스케일 유지 (실제 명령만 PITCH_MIN~MAX로 제한)
     uint32_t duty = 409 + (uint32_t)((int32_t)angle_x10 * (2048 - 409) / TURRET_MAX_X10);
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CH_PITCH, duty);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CH_PITCH);
@@ -957,7 +957,7 @@ static void control_task(void* arg) {
             g_pitch_hold_down = false;
             set_track_targets(0, 0);
             set_turret_target_deg(TURRET_CENTER_DEG, true);  // yaw 90°
-            set_pitch_target_deg(PITCH_CENTER_DEG, true);    // pitch 80°
+            set_pitch_target_deg(PITCH_CENTER_DEG, true);    // pitch 45°
 
             if (dfplayer_boot_ready()) {
                 dfplayer_play(DFPLAYER_TRACK_CONNECTED);
