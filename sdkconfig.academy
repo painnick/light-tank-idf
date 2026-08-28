@@ -1,0 +1,20 @@
+# Academy 2호 (Academy 2nd tank) — turret servo profile
+#
+# Apply with sdkconfig.defaults chain (recommended):
+#   idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32c6;sdkconfig.academy" set-target esp32c6
+#   idf.py build
+#
+# Or merge into an existing sdkconfig after menuconfig once adds RC Tank Turret Servos.
+
+# Yaw (left/right)
+CONFIG_TURRET_YAW_CENTER_DEG=90
+CONFIG_TURRET_YAW_MIN_DEG=0
+CONFIG_TURRET_YAW_MAX_DEG=180
+CONFIG_TURRET_YAW_HOLD_STEP_X10=2
+
+# Pitch (up/down) — Academy kit mechanical range
+CONFIG_TURRET_PITCH_CENTER_DEG=80
+CONFIG_TURRET_PITCH_MIN_DEG=60
+CONFIG_TURRET_PITCH_MAX_DEG=110
+CONFIG_TURRET_PITCH_STEP_DEG=5
+CONFIG_TURRET_PITCH_HOLD_INTERVAL_MS=50

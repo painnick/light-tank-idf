@@ -11,7 +11,7 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 |------|------|
 | 트랙 구동 | DRV8833, 좌/우 스틱 Y축 — panzer4식 가속/감속 램프(~1초 최대) |
 | 터렛 좌우 | SG90 — D-Pad ←/→ 연속 슬루, 3초 무입력 detach |
-| 터렛 상하 | SG90(GPIO23) — 연결 시 **45°**, 범위 **15°~75°**, D-Pad ↑/↓ **1°** 연속(홀드), 3초 무입력 detach |
+| 터렛 상하 | SG90(GPIO23) — 연결/Start 시 Kconfig 센터, D-Pad ↑/↓ 홀드 스텝, 3초 무입력 detach |
 | 포신 | B 버튼 — 효과음 즉시, 약 0.5초 후 LED, 약 1초 후 트랙 후진 리코일 |
 | 게틀링(기관총) | A 버튼 — 효과음 즉시, 0.5초 후 LED 깜빡임 (~0.5초) |
 | 볼륨 | L1 / R1 (홀드 시 100ms마다 1단계, 즉시 반영), 릴리스 시 NVS 저장 |
@@ -135,8 +135,8 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 | 좌 스틱 Y | 좌측 트랙 전/후진 (즉시 최대 아님, ~1초 램프 가속) |
 | 우 스틱 Y | 우측 트랙 전/후진 (동일) |
 | D-Pad ← / → | 터렛 **좌/우** 회전 (연속 슬루) |
-| D-Pad ↑ / ↓ | 터렛 **상하** 1° 연속 (**15°~75°**, 누르는 동안, 연결 시 45°) |
-| Start | 좌우 90° / 상하 45° |
+| D-Pad ↑ / ↓ | 터렛 **상하** 홀드 스텝 (범위·스텝은 Kconfig) |
+| Start | yaw/pitch 센터 각도로 리셋 (Kconfig) |
 | A | 게틀링(기관총) — 효과음 즉시, **0.5초 후** LED 75ms 깜빡임 약 0.5초 |
 | B | 포신 — **효과음 즉시**, 약 **0.5초 후** LED, 약 **1초 후** 리코일(후진) |
 | Y | 헤드라이트 On/Off 토글 (길게 눌러도 1회만) |
@@ -144,18 +144,20 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 ### 터렛 좌우 (yaw, GPIO21)
 
-- **패드 연결**: attach + **90°**
-- **D-Pad ←/→**: 0.1° 단위 연속 슬루
+- **패드 연결 / Start**: Kconfig `TURRET_YAW_CENTER_DEG` (기본 **90°**)
+- **범위**: `TURRET_YAW_MIN_DEG` ~ `TURRET_YAW_MAX_DEG` (기본 **0°~180°**)
+- **D-Pad ←/→**: 0.1° 단위 연속 슬루 (`TURRET_YAW_HOLD_STEP_X10`, 기본 0.2°/10ms)
 - **3초 무입력**(슬루 완료 후): detach
 
 ### 터렛 상하 (pitch, GPIO23)
 
-- **패드 연결**: attach + **45°** (`PITCH_CENTER_DEG`)
-- **범위**: **15°~75°** (`PITCH_MIN_DEG` ~ `PITCH_MAX_DEG`)
-- **D-Pad ↑/↓ 홀드**: 약 **50ms**마다 **1°** 씩 연속 이동 (~20°/s, `PITCH_HOLD_INTERVAL_MS`)
+- **패드 연결 / Start**: Kconfig `TURRET_PITCH_CENTER_DEG` (Light Tank 기본 **45°**)
+- **범위**: `TURRET_PITCH_MIN_DEG` ~ `TURRET_PITCH_MAX_DEG` (Light Tank 기본 **15°~75°**)
+- **D-Pad ↑/↓ 홀드**: `TURRET_PITCH_STEP_DEG`°씩, `TURRET_PITCH_HOLD_INTERVAL_MS` ms 간격 (기본 1° / 50ms)
 - **슬루**: 목표까지 부드럽게 이동
 - **3초 무입력**(슬루 완료 후): detach
-- **Start**: 좌우 90° / 상하 45°
+
+각도는 `idf.py menuconfig` → **RC Tank Turret Servos** 에서 변경합니다.
 
 ### 포 발사 시퀀스 (B)
 
@@ -198,7 +200,7 @@ main/
   main.c              # 모터/서보/LED, 게임패드 처리, 제어 루프
   my_platform.c       # Bluepad32 커스텀 플랫폼, 공유 입력 상태
   dfplayer.c/.h       # DFPlayer Mini UART 제어
-  Kconfig.projbuild   # 하드웨어 핀 (menuconfig)
+  Kconfig.projbuild   # 하드웨어 핀 + 터렛 서보 각도 (menuconfig)
 components/
   bluepad32/          # git submodule: https://github.com/painnick/bluepad32
                       # ESP-IDF 컴포넌트는 src/components/bluepad32
@@ -227,13 +229,42 @@ idf.py build
 idf.py -p COMx flash monitor
 ```
 
+또는 프로젝트 루트의 배치 파일 (`env.bat`로 ESP-IDF 환경 로드):
+
+| 스크립트 | 설명 |
+|----------|------|
+| `build.bat` | Light Tank 프로필 빌드 |
+| `build-academy.bat` | Academy 2호 프로필 빌드 |
+| `flash.bat COMx` | 플래시 + 모니터 (`FLASH_PORT` 환경 변수도 가능) |
+| `build-flash.bat COMx` | Light Tank 빌드 후 플래시 |
+| `build-flash-academy.bat COMx` | Academy 2호 빌드 후 플래시 |
+
+프로필을 바꾸면 `.build-profile`과 비교해 `sdkconfig`를 자동 재생성합니다.
+
 핀만 바꿀 때:
 
 ```bat
 idf.py menuconfig
-REM → RC Tank Hardware Pins
+REM → RC Tank Hardware Pins / RC Tank Turret Servos
 idf.py build
 ```
+
+### 차종별 sdkconfig (프로필)
+
+| 프로필 | 파일 | pitch (센터 / 범위 / 스텝) |
+|--------|------|---------------------------|
+| Light Tank (기본) | `sdkconfig.defaults.esp32c6` | 45° / 15°~75° / 1° |
+| Academy 2호 | `sdkconfig.academy` | 80° / 60°~110° / 5° |
+
+Academy 2호 빌드 예:
+
+```bat
+idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32c6;sdkconfig.academy" set-target esp32c6
+idf.py build
+idf.py -p COMx flash monitor
+```
+
+`SDKCONFIG_DEFAULTS`는 **앞에서 뒤로** 덮어씁니다. 핀맵은 `sdkconfig.defaults.esp32c6`, 터렛 각도만 `sdkconfig.academy`가 오버라이드합니다.
 
 클론 시 Bluepad32 서브모듈을 함께 가져와야 합니다.
 
@@ -249,6 +280,7 @@ git submodule update --init --recursive
 - Wi-Fi 비활성
 - Bluepad32 커스텀 플랫폼
 - 공통: `sdkconfig.defaults` / C6: `sdkconfig.defaults.esp32c6`
+- 차종: `sdkconfig.academy` (Academy 2호 터렛 각도)
 - 기본 로그 레벨: INFO (상세 BLE 단계는 DEBUG)
 
 ## 라이선스 관련

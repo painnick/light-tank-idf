@@ -128,20 +128,32 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 #define TURRET_HOLD_X10_PER_LOOP       2  // D-Pad 유지 시 10ms당 목표 변화 (0.1°)
 #define TURRET_SLEW_X10_PER_LOOP       2  // 출력은 목표보다 약간 빠르게 따라감 (따라잡기)
 #define TURRET_IDLE_DISCONNECT_MS   3000  // 무입력 + 슬루 완료 후 서보 detach (ms)
-#define TURRET_CENTER_DEG             90
+#define TURRET_CENTER_DEG             CONFIG_TURRET_YAW_CENTER_DEG
+#define TURRET_MIN_DEG                CONFIG_TURRET_YAW_MIN_DEG
+#define TURRET_MAX_DEG                CONFIG_TURRET_YAW_MAX_DEG
 #define TURRET_CENTER_X10    (TURRET_CENTER_DEG * TURRET_DEG_SCALE)
-#define TURRET_MAX_X10       (180 * TURRET_DEG_SCALE)
+#define TURRET_MIN_X10       (TURRET_MIN_DEG * TURRET_DEG_SCALE)
+#define TURRET_MAX_X10       (TURRET_MAX_DEG * TURRET_DEG_SCALE)
+#define TURRET_HOLD_X10_PER_LOOP      CONFIG_TURRET_YAW_HOLD_STEP_X10
+#define TURRET_PWM_FULL_SCALE_X10     (180 * TURRET_DEG_SCALE)
 
-// 포탑 상하(pitch) — GPIO23, 연결 시 45°, 범위 15°~75°, 홀드 시 1°씩 연속, 3초 무입력 detach
-#define PITCH_STEP_DEG                 1   // 홀드 중 목표 1° 단위
-#define PITCH_HOLD_INTERVAL_MS        50   // 홀드 시 1° 간격 (ms)
+// 포탑 상하(pitch) — Kconfig: RC Tank Turret Servos
+#define PITCH_STEP_DEG                 CONFIG_TURRET_PITCH_STEP_DEG
+#define PITCH_HOLD_INTERVAL_MS         CONFIG_TURRET_PITCH_HOLD_INTERVAL_MS
 #define PITCH_IDLE_DISCONNECT_MS    3000
-#define PITCH_CENTER_DEG              45  // 패드 연결 / Start 시
-#define PITCH_MIN_DEG                 15  // 아래 한계
-#define PITCH_MAX_DEG                 75  // 위 한계
+#define PITCH_CENTER_DEG               CONFIG_TURRET_PITCH_CENTER_DEG
+#define PITCH_MIN_DEG                  CONFIG_TURRET_PITCH_MIN_DEG
+#define PITCH_MAX_DEG                  CONFIG_TURRET_PITCH_MAX_DEG
 #define PITCH_SLEW_X10_PER_LOOP       10  // 10ms당 1° — 1° 스텝을 빠르게 따라감
 #define PITCH_MIN_X10   (PITCH_MIN_DEG * TURRET_DEG_SCALE)
 #define PITCH_MAX_X10   (PITCH_MAX_DEG * TURRET_DEG_SCALE)
+
+_Static_assert(CONFIG_TURRET_YAW_MIN_DEG <= CONFIG_TURRET_YAW_CENTER_DEG
+               && CONFIG_TURRET_YAW_CENTER_DEG <= CONFIG_TURRET_YAW_MAX_DEG,
+               "Yaw center must be between min and max");
+_Static_assert(CONFIG_TURRET_PITCH_MIN_DEG <= CONFIG_TURRET_PITCH_CENTER_DEG
+               && CONFIG_TURRET_PITCH_CENTER_DEG <= CONFIG_TURRET_PITCH_MAX_DEG,
+               "Pitch center must be between min and max");
 #define GAMEPAD_CONNECT_GRACE_MS  500 // 연결 직후 입력 무시 (노이즈/잔여 D-Pad 방지)
 #define GAMEPAD_STICK_DEADZONE    50
 #define GAMEPAD_INPUT_TIMEOUT_MS  1000 // 스틱이 살아 있는데 리포트가 끊기면 트랙 정지 (BLE는 무입력 때 리포트를 안 보냄)
@@ -468,7 +480,7 @@ static void process_motor_ramp(void) {
 // 서보 제어 — 0.1° 단위 연속 슬루 (D-Pad 유지 시 매 루프 목표 전진)
 // ============================================================================
 static int clamp_turret_x10(int x10) {
-    if (x10 < 0) return 0;
+    if (x10 < TURRET_MIN_X10) return TURRET_MIN_X10;
     if (x10 > TURRET_MAX_X10) return TURRET_MAX_X10;
     return x10;
 }
@@ -477,7 +489,7 @@ static int clamp_turret_x10(int x10) {
 static void turret_apply_pwm_x10(int angle_x10) {
     angle_x10 = clamp_turret_x10(angle_x10);
     // duty = 409 + angle_x10 * (2048-409) / (180*10)
-    uint32_t duty = 409 + (uint32_t)((int32_t)angle_x10 * (2048 - 409) / TURRET_MAX_X10);
+    uint32_t duty = 409 + (uint32_t)((int32_t)angle_x10 * (2048 - 409) / TURRET_PWM_FULL_SCALE_X10);
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CH_SERVO, duty);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CH_SERVO);
 }
@@ -579,7 +591,7 @@ static int clamp_pitch_x10(int x10) {
 static void pitch_apply_pwm_x10(int angle_x10) {
     angle_x10 = clamp_pitch_x10(angle_x10);
     // duty 맵은 0~180° 전체 스케일 유지 (실제 명령만 PITCH_MIN~MAX로 제한)
-    uint32_t duty = 409 + (uint32_t)((int32_t)angle_x10 * (2048 - 409) / TURRET_MAX_X10);
+    uint32_t duty = 409 + (uint32_t)((int32_t)angle_x10 * (2048 - 409) / TURRET_PWM_FULL_SCALE_X10);
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CH_PITCH, duty);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CH_PITCH);
 }
@@ -625,7 +637,7 @@ static void set_pitch_target_deg(int angle_deg, bool immediate) {
     }
 }
 
-// 목표 ±step° (60~110)
+// 목표 ±PITCH_STEP_DEG (Kconfig min~max)
 static void pitch_nudge(int delta_deg) {
     int cur_deg = g_pitch_target_x10 / TURRET_DEG_SCALE;
     int next = cur_deg + delta_deg;
@@ -982,8 +994,8 @@ static void control_task(void* arg) {
             g_pitch_hold_up = false;
             g_pitch_hold_down = false;
             set_track_targets(0, 0);
-            set_turret_target_deg(TURRET_CENTER_DEG, true);  // yaw 90°
-            set_pitch_target_deg(PITCH_CENTER_DEG, true);    // pitch 45°
+            set_turret_target_deg(TURRET_CENTER_DEG, true);
+            set_pitch_target_deg(PITCH_CENTER_DEG, true);
 
             if (dfplayer_boot_ready()) {
                 dfplayer_play(DFPLAYER_TRACK_CONNECTED);

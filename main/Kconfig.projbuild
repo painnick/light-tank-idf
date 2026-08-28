@@ -72,7 +72,7 @@ menu "RC Tank Hardware Pins"
         default 23
         help
             Turret elevation (pitch) SG90 PWM. Default: GPIO23.
-            Center 80 on connect; range 60-110; D-Pad up/down steps of 5 deg; idle detach 3s.
+            Angle limits and steps: menuconfig → RC Tank Turret Servos.
 
     config PIN_DFPLAYER_TX
         int "DFPlayer UART TX (ESP -> DFPlayer RX)"
@@ -88,5 +88,63 @@ menu "RC Tank Hardware Pins"
         default -1
         help
             Leave at -1 (default). RX is not used on the C6 Super Mini PCB.
+
+endmenu
+
+menu "RC Tank Turret Servos"
+
+    comment "Yaw (left/right, GPIO21) — D-Pad hold moves target continuously"
+
+    config TURRET_YAW_CENTER_DEG
+        int "Yaw center angle on connect / Start (degrees)"
+        range 0 180
+        default 90
+        help
+            Turret horizontal center when the gamepad connects or Start is pressed.
+
+    config TURRET_YAW_MIN_DEG
+        int "Yaw minimum angle (degrees)"
+        range 0 180
+        default 0
+
+    config TURRET_YAW_MAX_DEG
+        int "Yaw maximum angle (degrees)"
+        range 0 180
+        default 180
+
+    config TURRET_YAW_HOLD_STEP_X10
+        int "Yaw D-Pad hold step (0.1 degree per 10 ms loop)"
+        range 1 50
+        default 2
+        help
+            While D-Pad left/right is held, target moves by this many 0.1° units
+            each control loop (10 ms). Default 2 = 0.2°/loop (~20°/s).
+
+    comment "Pitch (up/down, GPIO23) — D-Pad hold steps at interval"
+
+    config TURRET_PITCH_CENTER_DEG
+        int "Pitch center angle on connect / Start (degrees)"
+        range 0 180
+        default 45
+
+    config TURRET_PITCH_MIN_DEG
+        int "Pitch minimum angle (degrees)"
+        range 0 180
+        default 15
+
+    config TURRET_PITCH_MAX_DEG
+        int "Pitch maximum angle (degrees)"
+        range 0 180
+        default 75
+
+    config TURRET_PITCH_STEP_DEG
+        int "Pitch D-Pad hold step (degrees)"
+        range 1 15
+        default 1
+
+    config TURRET_PITCH_HOLD_INTERVAL_MS
+        int "Pitch D-Pad hold step interval (ms)"
+        range 10 500
+        default 50
 
 endmenu
