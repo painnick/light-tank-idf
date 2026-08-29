@@ -10,8 +10,8 @@ Arduino/PlatformIO 프로젝트 **M3Stuart_ESP32C3** 를 ESP-IDF v5.5.x 로 포�
 | 기능 | 설명 |
 |------|------|
 | 트랙 구동 | DRV8833, 좌/우 스틱 Y축 — panzer4식 가속/감속 램프(~1초 최대) |
-| 터렛 좌우 | SG90 — D-Pad ←/→ 연속 슬루, 연결 중 PWM 유지 |
-| 터렛 상하 | SG90(GPIO23) — 연결/Start 시 Kconfig 센터, D-Pad ↑/↓ 홀드 스텝 |
+| 터렛 좌우 | SG90 — D-Pad ←/→ 연속 슬루, 무입력 2초 후 PWM detach |
+| 터렛 상하 | SG90(GPIO23) — 연결/Start 시 Kconfig 센터, D-Pad ↑/↓ 홀드 스텝, 무입력 2초 후 detach |
 | 포신 | B 버튼 — 효과음 즉시, 약 0.5초 후 LED, 약 1초 후 트랙 후진 리코일 |
 | 게틀링(기관총) | A 버튼 — 효과음 즉시, 0.5초 후 LED 깜빡임 (~0.5초) |
 | 볼륨 | L1 / R1 (홀드 시 100ms마다 1단계, 즉시 반영), 릴리스 시 NVS 저장 |
@@ -147,8 +147,8 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 - **패드 연결 / Start**: Kconfig `TURRET_YAW_CENTER_DEG` (기본 **90°**)
 - **범위**: `TURRET_YAW_MIN_DEG` ~ `TURRET_YAW_MAX_DEG` (기본 **0°~180°**)
 - **D-Pad ←/→**: 누르는 동안 연속 슬루 (`TURRET_YAW_HOLD_STEP_X10`, 기본 0.2°/10ms)
-- **패드 연결 중**: PWM 유지 (idle detach 없음)
-- **연결 해제**: detach
+- **무입력 약 2초**(슬루 완료 후): detach (다시 움직이면 마지막 각도에서 attach)
+- **연결 해제**: 즉시 detach
 
 ### 터렛 상하 (pitch, GPIO23)
 
@@ -156,8 +156,8 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 - **범위**: `TURRET_PITCH_MIN_DEG` ~ `TURRET_PITCH_MAX_DEG` (Light Tank 기본 **15°~75°**)
 - **D-Pad ↑/↓ 홀드**: `TURRET_PITCH_STEP_DEG`°씩, `TURRET_PITCH_HOLD_INTERVAL_MS` ms 간격 (기본 1° / 50ms)
 - **슬루**: 목표까지 부드럽게 이동
-- **패드 연결 중**: PWM 유지 (idle detach 없음)
-- **연결 해제**: detach
+- **무입력 약 2초**(슬루 완료 후): detach (다시 움직이면 마지막 각도에서 attach)
+- **연결 해제**: 즉시 detach
 
 각도는 `idf.py menuconfig` → **RC Tank Turret Servos** 에서 변경합니다.
 

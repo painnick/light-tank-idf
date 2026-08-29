@@ -1,7 +1,7 @@
 # Design: Servo idle detach (yaw + pitch)
 
 **Date:** 2026-08-29  
-**Status:** Approved — pending implementation  
+**Status:** Implemented  
 **Project:** light-tank-idf
 
 ## Summary

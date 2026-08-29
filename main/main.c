@@ -134,6 +134,7 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 #define TURRET_MAX_X10       (TURRET_MAX_DEG * TURRET_DEG_SCALE)
 #define TURRET_HOLD_X10_PER_LOOP      CONFIG_TURRET_YAW_HOLD_STEP_X10
 #define TURRET_PWM_FULL_SCALE_X10     (180 * TURRET_DEG_SCALE)
+#define TURRET_IDLE_DETACH_MS         2000  // 축별 무입력 + 슬루 완료 후 PWM detach
 
 // 포탑 상하(pitch) — Kconfig: RC Tank Turret Servos
 #define PITCH_STEP_DEG                 CONFIG_TURRET_PITCH_STEP_DEG
@@ -208,6 +209,7 @@ static int g_turret_current_x10 = TURRET_CENTER_X10;
 static bool g_turret_attached = false;
 static bool g_turret_hold_left = false;
 static bool g_turret_hold_right = false;
+static int64_t g_turret_last_command_ms = 0;
 
 // GamePadPlus V3: L1/R1 릴리스 리포트에 hat 노이즈가 섞임. 새 BLE 리포트만 반영.
 static uint32_t s_last_dpad_report_seq = 0;
@@ -526,8 +528,9 @@ static void turret_attach(void) {
 static void turret_detach(void) {
     if (!g_turret_attached) return;
 
-    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CH_SERVO, 0);
+    // 핀을 먼저 LEDC에서 떼서 idle_level LOW가 SG90로 나가지 않게 한다.
     gpio_reset_pin(PIN_TURRET_SERVO);
+    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CH_SERVO, 0);
     g_turret_attached = false;
     g_turret_hold_left = false;
     g_turret_hold_right = false;
@@ -541,6 +544,7 @@ static void set_turret_target_deg(int angle_deg, bool immediate) {
     if (immediate) {
         g_turret_current_x10 = x10;
     }
+    g_turret_last_command_ms = now_ms();
     if (!g_turret_attached) {
         turret_attach();
     } else if (immediate) {
@@ -552,12 +556,14 @@ static void set_turret_target_deg(int angle_deg, bool immediate) {
 static void process_turret_slew(void) {
     // 홀드 중이면 목표를 매 루프 조금씩 이동 (100ms 점프 제거)
     if (g_turret_hold_left && !g_turret_hold_right) {
+        g_turret_last_command_ms = now_ms();
         int next = g_turret_target_x10 - TURRET_HOLD_X10_PER_LOOP;
         g_turret_target_x10 = clamp_turret_x10(next);
         if (!g_turret_attached) {
             turret_attach();
         }
     } else if (g_turret_hold_right && !g_turret_hold_left) {
+        g_turret_last_command_ms = now_ms();
         int next = g_turret_target_x10 + TURRET_HOLD_X10_PER_LOOP;
         g_turret_target_x10 = clamp_turret_x10(next);
         if (!g_turret_attached) {
@@ -578,6 +584,14 @@ static void process_turret_slew(void) {
         g_turret_current_x10 = g_turret_target_x10;
     }
     turret_apply_pwm_x10(g_turret_current_x10);
+}
+
+static void process_turret_idle(void) {
+    if (!g_turret_attached) return;
+    if (g_turret_hold_left || g_turret_hold_right) return;
+    if (g_turret_current_x10 != g_turret_target_x10) return;
+    if ((now_ms() - g_turret_last_command_ms) < TURRET_IDLE_DETACH_MS) return;
+    turret_detach();
 }
 
 // ============================================================================
@@ -608,8 +622,8 @@ static void pitch_attach(void) {
 static void pitch_detach(void) {
     if (!g_pitch_attached) return;
 
-    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CH_PITCH, 0);
     gpio_reset_pin(PIN_TURRET_PITCH);
+    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CH_PITCH, 0);
     g_pitch_attached = false;
     g_pitch_hold_up = false;
     g_pitch_hold_down = false;
@@ -622,6 +636,7 @@ static void set_pitch_target_deg(int angle_deg, bool immediate) {
     if (immediate) {
         g_pitch_current_x10 = x10;
     }
+    g_pitch_last_input_ms = now_ms();
     if (!g_pitch_attached) {
         pitch_attach();
     } else if (immediate) {
@@ -636,7 +651,6 @@ static void pitch_nudge(int delta_deg) {
     if (next < PITCH_MIN_DEG) next = PITCH_MIN_DEG;
     if (next > PITCH_MAX_DEG) next = PITCH_MAX_DEG;
     if (next * TURRET_DEG_SCALE == g_pitch_target_x10) return;
-    g_pitch_last_input_ms = now_ms();
     set_pitch_target_deg(next, false);
 }
 
@@ -671,6 +685,14 @@ static void process_pitch_slew(void) {
         g_pitch_current_x10 = g_pitch_target_x10;
     }
     pitch_apply_pwm_x10(g_pitch_current_x10);
+}
+
+static void process_pitch_idle(void) {
+    if (!g_pitch_attached) return;
+    if (g_pitch_hold_up || g_pitch_hold_down) return;
+    if (g_pitch_current_x10 != g_pitch_target_x10) return;
+    if ((now_ms() - g_pitch_last_input_ms) < TURRET_IDLE_DETACH_MS) return;
+    pitch_detach();
 }
 
 // ============================================================================
@@ -744,7 +766,6 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
     if (misc_buttons & MISC_BUTTON_START) {
         if (!g_start_pressed) {
             g_start_pressed = true;
-            g_pitch_last_input_ms = now_ms();
             g_turret_hold_left = false;
             g_turret_hold_right = false;
             g_pitch_hold_up = false;
@@ -996,11 +1017,10 @@ static void control_task(void* arg) {
     while (1) {
         bool cur_connected = gamepad_is_connected();
 
-        // 연결 직후: 터렛 서보 연결·중앙 + 입력 유예 + 효과음
+        // 연결 직후: 터렛 서보 중앙 PWM + 입력 유예 + 효과음 (이후 2초 idle이면 detach)
         if (gamepad_read_new_connection()) {
             int64_t now = now_ms();
             g_input_ignore_until_ms = now + GAMEPAD_CONNECT_GRACE_MS;
-            g_pitch_last_input_ms = now;
             reset_dpad_holds();
             set_track_targets(0, 0);
             set_turret_target_deg(TURRET_CENTER_DEG, true);
@@ -1075,6 +1095,8 @@ static void control_task(void* arg) {
         process_motor_ramp();
         process_turret_slew();
         process_pitch_slew();
+        process_turret_idle();
+        process_pitch_idle();
         process_idle_sound();
 
         vTaskDelay(pdMS_TO_TICKS(LOOP_INTERVAL_MS));
@@ -1150,7 +1172,7 @@ void app_main(void) {
     gpio_set_level(PIN_MG_LED, 0);
     gpio_set_level(PIN_HEADLIGHT, 0);
 
-    // LEDC 초기화 (서보 채널은 패드 연결 시 turret_attach)
+    // LEDC 초기화 (서보 채널은 패드 연결/D-Pad 시 attach, 무입력 2초 후 detach)
     init_ledc();
 
     // 3) IN/PWM 준비 완료 후 드라이버 enable
