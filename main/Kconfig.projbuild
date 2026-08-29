@@ -126,22 +126,24 @@ menu "RC Tank Turret Servos"
     config TURRET_PITCH_CENTER_DEG
         int "Pitch center angle on connect / Start (degrees)"
         range 0 180
-        default 45
+        default 60
 
     config TURRET_PITCH_MIN_DEG
         int "Pitch minimum angle (degrees)"
         range 0 180
-        default 15
+        default 45
 
     config TURRET_PITCH_MAX_DEG
         int "Pitch maximum angle (degrees)"
         range 0 180
-        default 75
+        default 65
 
     config TURRET_PITCH_STEP_DEG
-        int "Pitch D-Pad hold step (degrees)"
-        range 1 15
-        default 1
+        int "Pitch D-Pad hold step (degrees, negative inverts up/down)"
+        range -15 15
+        default -2
+        help
+            Degrees per hold interval. Negative reverses D-Pad up/down. Must not be 0.
 
     config TURRET_PITCH_HOLD_INTERVAL_MS
         int "Pitch D-Pad hold step interval (ms)"

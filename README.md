@@ -152,9 +152,9 @@ PCB: nSLEEP(GPIO6) **~10k pull-down** 권장. IN×4 pull-down은 생략 가능.
 
 ### 터렛 상하 (pitch, GPIO23)
 
-- **패드 연결 / Start**: Kconfig `TURRET_PITCH_CENTER_DEG` (Light Tank 기본 **45°**)
-- **범위**: `TURRET_PITCH_MIN_DEG` ~ `TURRET_PITCH_MAX_DEG` (Light Tank 기본 **15°~75°**)
-- **D-Pad ↑/↓ 홀드**: `TURRET_PITCH_STEP_DEG`°씩, `TURRET_PITCH_HOLD_INTERVAL_MS` ms 간격 (기본 1° / 50ms)
+- **패드 연결 / Start**: Kconfig `TURRET_PITCH_CENTER_DEG` (Light Tank 기본 **60°**)
+- **범위**: `TURRET_PITCH_MIN_DEG` ~ `TURRET_PITCH_MAX_DEG` (Light Tank 기본 **45°~65°**)
+- **D-Pad ↑/↓ 홀드**: `TURRET_PITCH_STEP_DEG`°씩, `TURRET_PITCH_HOLD_INTERVAL_MS` ms 간격 (기본 **-2°** / 50ms, 음수는 상하 반전)
 - **슬루**: 목표까지 부드럽게 이동
 - **무입력 약 2초**(슬루 완료 후): detach (다시 움직이면 마지막 각도에서 attach)
 - **연결 해제**: 즉시 detach
@@ -255,8 +255,8 @@ idf.py build
 
 | 프로필 | 파일 | pitch (센터 / 범위 / 스텝) |
 |--------|------|---------------------------|
-| Light Tank (기본) | `sdkconfig.defaults.esp32c6` | 45° / 15°~75° / 1° |
-| Academy 2호 | `sdkconfig.academy` | 80° / 60°~110° / 5° |
+| Light Tank (기본) | `sdkconfig.defaults.esp32c6` | 60° / 45°~65° / -2° |
+| Academy 2호 | `sdkconfig.academy` | 60° / 45°~65° / -2° |
 
 Academy 2호 빌드 예:
 

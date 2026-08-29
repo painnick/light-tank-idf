@@ -152,6 +152,8 @@ _Static_assert(CONFIG_TURRET_YAW_MIN_DEG <= CONFIG_TURRET_YAW_CENTER_DEG
 _Static_assert(CONFIG_TURRET_PITCH_MIN_DEG <= CONFIG_TURRET_PITCH_CENTER_DEG
                && CONFIG_TURRET_PITCH_CENTER_DEG <= CONFIG_TURRET_PITCH_MAX_DEG,
                "Pitch center must be between min and max");
+_Static_assert(CONFIG_TURRET_PITCH_STEP_DEG != 0,
+               "Pitch step must be non-zero (negative inverts D-Pad)");
 #define GAMEPAD_CONNECT_GRACE_MS  500 // 연결 직후 입력 무시 (노이즈/잔여 D-Pad 방지)
 #define DPAD_QUIET_AFTER_BUTTON_MS 300 // L1/R1·페이스 버튼 직후 hat 노이즈 무시
 #define DPAD_HOLD_BLOCK_MASK \
