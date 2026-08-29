@@ -15,6 +15,7 @@
 #include "nvs.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
+#include "driver/sdm.h"
 
 #include "btstack_port_esp32.h"
 #include "dfplayer.h"
@@ -99,6 +100,12 @@ _Static_assert(__builtin_popcount(PIN_USAGE_MASK) == 11,
 
 #define LEDC_TIMER_MOTOR    LEDC_TIMER_0
 #define LEDC_TIMER_SERVO    LEDC_TIMER_1     // yaw/pitch 공통 50Hz
+
+// LEDC 채널 6개(모터 4 + 서보 2)가 가득 차서 헤드라이트는 SDM으로 평균 전압을 낮춘다.
+#define HEADLIGHT_DUTY_PERCENT 10
+#define HEADLIGHT_SDM_DENSITY_ON \
+    ((int8_t)((HEADLIGHT_DUTY_PERCENT * 256) / 100 - 128))  // 10% → density -103
+#define HEADLIGHT_SDM_DENSITY_OFF ((int8_t)-128)            // 0%
 
 // ============================================================================
 // NVS 키
@@ -272,6 +279,7 @@ static bool g_start_pressed = false;
 // Y 버튼: 헤드라이트 토글 (길게 눌러도 1회만 — rising edge)
 static bool g_y_pressed = false;
 static bool g_headlight_on = false;
+static sdm_channel_handle_t s_headlight_sdm;
 
 // 현재 시간 (us)
 static inline int64_t now_us(void) {
@@ -365,6 +373,23 @@ static void init_ledc(void) {
         .clk_cfg = LEDC_AUTO_CLK,
     };
     ledc_timer_config(&servo_timer);
+}
+
+static void set_headlight(bool on) {
+    int8_t density = on ? HEADLIGHT_SDM_DENSITY_ON : HEADLIGHT_SDM_DENSITY_OFF;
+    sdm_channel_set_pulse_density(s_headlight_sdm, density);
+}
+
+static void init_headlight_pwm(void) {
+    sdm_config_t config = {
+        .gpio_num = PIN_HEADLIGHT,
+        .clk_src = SDM_CLK_SRC_DEFAULT,
+        .sample_rate_hz = 1000000,
+    };
+    ESP_ERROR_CHECK(sdm_new_channel(&config, &s_headlight_sdm));
+    // enable 전에 0% — 기본 density 0은 약 50%라서 켜지기 전에 깜빡인다
+    ESP_ERROR_CHECK(sdm_channel_set_pulse_density(s_headlight_sdm, HEADLIGHT_SDM_DENSITY_OFF));
+    ESP_ERROR_CHECK(sdm_channel_enable(s_headlight_sdm));
 }
 
 // ============================================================================
@@ -784,7 +809,7 @@ static void process_gamepad(int32_t axis_y, int32_t axis_ry,
         if (!g_y_pressed) {
             g_y_pressed = true;
             g_headlight_on = !g_headlight_on;
-            gpio_set_level(PIN_HEADLIGHT, g_headlight_on ? 1 : 0);
+            set_headlight(g_headlight_on);
             ESP_LOGI(TAG, "헤드라이트 %s", g_headlight_on ? "ON" : "OFF");
         }
     } else {
@@ -1059,7 +1084,7 @@ static void control_task(void* arg) {
             g_headlight_on = false;
             gpio_set_level(PIN_MG_LED, 0);
             gpio_set_level(PIN_CANNON_LED, 0);
-            gpio_set_level(PIN_HEADLIGHT, 0);
+            set_headlight(false);
             ESP_LOGI(TAG, "게임패드 연결 해제됨");
         }
         prev_connected = cur_connected;
@@ -1164,7 +1189,6 @@ void app_main(void) {
     gpio_set_direction(PIN_RIGHT_IN2, GPIO_MODE_OUTPUT);
     gpio_set_direction(PIN_CANNON_LED, GPIO_MODE_OUTPUT);
     gpio_set_direction(PIN_MG_LED, GPIO_MODE_OUTPUT);
-    gpio_set_direction(PIN_HEADLIGHT, GPIO_MODE_OUTPUT);
 
     gpio_set_level(PIN_LEFT_IN1, 0);
     gpio_set_level(PIN_LEFT_IN2, 0);
@@ -1172,10 +1196,10 @@ void app_main(void) {
     gpio_set_level(PIN_RIGHT_IN2, 0);
     gpio_set_level(PIN_CANNON_LED, 0);
     gpio_set_level(PIN_MG_LED, 0);
-    gpio_set_level(PIN_HEADLIGHT, 0);
 
     // LEDC 초기화 (서보 채널은 패드 연결/D-Pad 시 attach, 무입력 2초 후 detach)
     init_ledc();
+    init_headlight_pwm();  // GPIO20 SDM 10% — LEDC 채널이 없어서 별도
 
     // 3) IN/PWM 준비 완료 후 드라이버 enable
     //    (게임패드 없으면 바로 enable — 스틱 입력 전에도 정지 유지)
